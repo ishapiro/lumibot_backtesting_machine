@@ -52,7 +52,7 @@ class OptionsIronCondor(Strategy):
         "wait_cycles_after_threshold_cross": 10,  # The number minium number days to wait before exiting a strategy -- this strategy only trades once a day
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
         "budget" : 100000, # Maximum portfolio size
-        "strike_roll_distance" : .80 * distance_of_wings # How close to the short do we allow the price to move before rolling.
+        "strike_roll_distance" : (0.20 * distance_of_wings) # How close to the short do we allow the price to move before rolling.
     }
 
     # The Lumibot framework does not current track margin requirements.  For this strategy
@@ -112,7 +112,7 @@ class OptionsIronCondor(Strategy):
             )
 
             # Create the condor
-            self.create_condor(
+            call_strike, put_strike = self.create_condor(
                 symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings
             )
             # Reserve the margin
@@ -120,22 +120,32 @@ class OptionsIronCondor(Strategy):
             self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
 
             # Add marker to the chart
-            self.add_marker(f"Create 1st New Condor, current margin: {self.margin_reserve}", value=underlying_price, color="green")
+            self.add_marker(f"Create 1st New Condor, current margin: {self.margin_reserve}", value=underlying_price, color="green"                            
+                                detail_text=f"Expiry: {expiry}\n\
+                                Underlying price: {underlying_price}\n\                               
+                                call strike: {call_strike}\n\
+                                put_strike: {put_strike}")
             return
 
         # Get all the open positions
         positions = self.get_positions()
 
-        crossed_threshold_up = False
-        crossed_threshold_down = False
+        roll_call_short = False
+        roll_put_short = False
         should_sell_for_expiry = False
         option_expiry = None
-        own_options = False
+        days_to_expiry = None
+
         # Loop through all the positions
         for position in positions:
+            # Reset sell/roll indicator before exit postions
+            roll_call_short = False
+            roll_put_short = False
+            should_sell_for_expiry = False
+            position_strike = position.asset.strike
+
             # If the position is an option
             if position.asset.asset_type == "option":
-                own_options = True
 
                 # Get the expiry of the option
                 option_expiry = position.asset.expiration
@@ -150,8 +160,8 @@ class OptionsIronCondor(Strategy):
                     break
 
                 # IMS roll when we are within a range of the short strikes
-                call_short_strike_boundary = position.asset.strike - strike_roll_distance
-                put_short_strike_boundary = position.asset.strike + strike_roll_distance
+                call_short_strike_boundary = None
+                put_short_strike_boundary = None
 
                 # Check if it's a short position
                 if position.quantity < 0:
@@ -162,18 +172,20 @@ class OptionsIronCondor(Strategy):
                     if position.asset.right == "CALL":
                         # Check if the delta is above the delta required
                         # IMS switch to check short cross over  -- if greeks["delta"] > delta_threshold:
-                        if underlying_price > call_short_strike_boundary:
+                        call_short_strike_boundary = position.asset.strike - strike_roll_distance
+                        if underlying_price >= call_short_strike_boundary:
                             # If it is, we need to roll the option
-                            crossed_threshold_up = True
+                            roll_call_short = True
                             break
 
                     # Check if the option is a put
                     elif position.asset.right == "PUT":
                         # Check if the delta is below the delta required
                         # IMS switch to crossing strike -- if greeks["delta"] < -delta_threshold:
-                        if underlying_price < put_short_strike_boundary:
+                        put_short_strike_boundary = position.asset.strike + strike_roll_distance
+                        if underlying_price <= put_short_strike_boundary:
                             # If it is, we need to roll the option
-                            crossed_threshold_down = True
+                            roll_put_short = True
                             break
 
         # If we need to sell for expiry
@@ -184,34 +196,41 @@ class OptionsIronCondor(Strategy):
             self.margin_reserve = self.margin_reserve - (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
 
             # Add marker to the chart
-            self.add_marker(f"Close Condor for Days to Expiry: margin reserve {self.margin_reserve}", value=underlying_price, color="red")
+            self.add_marker(f"Close Condor for Days to Expiry: margin reserve {self.margin_reserve}", value=underlying_price, color="red",
+                            detail_text=f"day_to_expiry: {days_to_expiry}\n\
+                            underlying_price: {underlying_price}\n\
+                            position_strike: {position_strike}")
 
             # Sleep for 5 seconds to make sure the order goes through
             # IMS do we need this in a backtest?
-            # self.sleep(5)
+            self.sleep(1)
 
             # Get closest 3rd Friday expiry
-            expiry = self.get_option_expiration_after_date(
+            new_expiry = self.get_option_expiration_after_date(
                 dt + timedelta(days=days_to_expiry)
             )
 
             # Create a new condor
-            self.create_condor(
+            call_strike, put_strike = self.create_condor(
                 symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings
             )
 
             self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
 
             # Add marker to the chart
-            self.add_marker(f"Create New Condor: margin reserve {self.margin_reserve}", value=underlying_price, color="green")
+            self.add_marker(f"Create New Condor: margin reserve {self.margin_reserve}", value=underlying_price, color="green",
+                            detail_text=f"New Expiry: {new_expiry}\n\
+                                Underlying price: {underlying_price}\n\                               
+                                call strike: {call_strike}\n\
+                                put_strike: {put_strike}")
 
         # If we need to roll the option
-        elif crossed_threshold_up or crossed_threshold_down:
+        elif roll_call_short or roll_put_short:
             # Create roll message
             roll_message = ""
-            if (crossed_threshold_up):
+            if roll_call_short:
                 roll_message = "Roll for approaching short strike: "
-            if (crossed_threshold_down):
+            if roll_put_short:
                 roll_message = "Roll for approaching put strike: "
 
             # Sell all of our positions
@@ -221,28 +240,32 @@ class OptionsIronCondor(Strategy):
 
             # Sleep for 5 seconds to make sure the order goes through
             # IMS do we need this in a backtest?
-            # self.sleep(5)
+            self.sleep(1)
 
             # Add marker to the chart
-            self.add_marker(f"Close for Roll, {roll_message} Margin reserve: {self.margin_reserve}", value=underlying_price, color="yellow")
+            self.add_marker(f"Close for Roll, {roll_message} Margin reserve: {self.margin_reserve}", value=underlying_price, color="yellow",
+                            detail_text=f"day_to_expiry: {days_to_expiry}\n\
+                                underlying_price: {underlying_price}\n\
+                                position_strike: position_strike")
 
             # Get closest 3rd Friday expiry
-            expiry = self.get_option_expiration_after_date(
+            roll_expiry = self.get_option_expiration_after_date(
                 dt + timedelta(days=days_to_expiry)
             )
 
             # Create a new condor
-            self.create_condor(
-                symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings
+            call_strike, put_strike = call_strike, put_strike = call_strike, put_strike = self.create_condor(
+                symbol, roll_expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings
             )
 
             self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
 
             # Add marker to the chart
-            self.add_marker(f"Rolled Condor: margin reserve {self.margin_reserve}", value=underlying_price, color="purple")
-
-            # Reset the wait counter
-            self.cycles_waited = 0
+            self.add_marker(f"Rolled Condor: margin reserve {self.margin_reserve}", value=underlying_price, color="purple",
+                            detail_text=f"New Expiry: {roll_expiry}\n\
+                                Underlying price: {underlying_price}\n\                               
+                                call strike: {call_strike}\n\
+                                put_strike: {put_strike}")
 
     def create_condor(
         self, symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings
@@ -350,6 +373,8 @@ class OptionsIronCondor(Strategy):
         self.submit_order(call_buy_order)
         self.submit_order(put_sell_order)
         self.submit_order(put_buy_order)
+
+        return call_strike, put_strike
 
     def get_put_orders(
         self, symbol, expiry, strike_step_size, put_strike, quantity_to_trade, distance_of_wings
