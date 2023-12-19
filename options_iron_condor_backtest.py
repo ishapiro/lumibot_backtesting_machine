@@ -507,12 +507,15 @@ class OptionsIronCondor(Strategy):
         suggested_date = self.get_option_expiration_after_date(
             dt + timedelta(days=days_to_expiration)
         )
-        if self.check_market_date(suggested_date):
-            return suggested_date
-        else:
-            suggested_date - timedelta(days=-1)
+        return suggested_date
+    
+        # debug
+        # if self.check_market_date(suggested_date):
+        #     return suggested_date
+        # else:
+        #     suggested_date - timedelta(days=-1)
 
-            expiry += timedelta(days=1)
+        #     expiry += timedelta(days=1)
 
 
 if __name__ == "__main__":
