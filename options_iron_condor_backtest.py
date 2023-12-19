@@ -120,7 +120,7 @@ class OptionsIronCondor(Strategy):
         # if we are below the capital threshold
         if self.first_iteration:
             # Get next 3rd Friday expiry after the date
-            expiry = self.get_next_expiration_date(days=days_to_expiry)
+            expiry = self.get_next_expiration_date(days_to_expiry)
 
             # Create the condor
             call_strike, put_strike = self.create_condor(
@@ -214,7 +214,7 @@ class OptionsIronCondor(Strategy):
             self.sleep(1)
 
             # Get closest 3rd Friday expiry
-            new_expiry = self.get_next_expiration_date(days=days_to_expiry)
+            new_expiry = self.get_next_expiration_date(days_to_expiry)
 
             # Create a new condor
             call_strike, put_strike = self.create_condor(
@@ -254,7 +254,7 @@ class OptionsIronCondor(Strategy):
                                 position_strike: position_strike")
 
             # Get closest 3rd Friday expiry
-            roll_expiry = self.get_next_expiration_date(days=days_to_expiry)
+            roll_expiry = self.get_next_expiration_date(days_to_expiry)
 
             # Create a new condor
             call_strike, put_strike = self.create_condor(
@@ -497,7 +497,7 @@ class OptionsIronCondor(Strategy):
 
         # Get the list of market open days from the market schedule
         market_open_days = market_schedule["market_open"].dt.date.tolist()
-        if expiry.date() in market_open_days:
+        if expiry in market_open_days:
             return True
         else:
             return False
@@ -511,6 +511,8 @@ class OptionsIronCondor(Strategy):
             return suggested_date
         else:
             suggested_date - timedelta(days=-1)
+
+            expiry += timedelta(days=1)
 
 
 if __name__ == "__main__":
