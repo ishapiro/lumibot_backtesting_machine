@@ -220,7 +220,7 @@ class OptionsIronCondor(Strategy):
 
             # Create a new condor
             call_strike, put_strike = self.create_condor(
-                symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings
+                symbol, new_expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings
             )
 
             self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
@@ -497,7 +497,7 @@ if __name__ == "__main__":
         # Backtest this strategy
         backtesting_start = datetime(2022, 1, 3)
         # backtesting_start = datetime(2020, 1, 1)
-        backtesting_end = datetime(2022, 6, 30)
+        backtesting_end = datetime(2023, 12, 31)
 
         trading_fee = TradingFee(percent_fee=0.003)  # IMS closer to .60 per leg
 
