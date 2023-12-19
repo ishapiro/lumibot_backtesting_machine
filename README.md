@@ -5,6 +5,26 @@ Lumibot Iron Condor Benchmarking Experiment
 This is my first experiment using the Lumibot framework to build a robust Iron Condor Backtesting environment.  Once completed
 I will ensure the reliability of the code by comparing results to alternative commercially available backtesting environments.
 
+## Background
+
+    Iron Condor Structure
+    
+    call log position
+    call short position
+    call short_strike_boundary
+    
+    Initial Stock Position
+    
+    put short_strike_boundary
+    put short position
+    put long posittion
+
+
+The goal of the effort is to create a flexible Iron Condor backtesting solution easily modified by updating
+parameters.   In future efforts these parameters will be exposed via web front end.
+
+## Development
+
 I have used MacOS for development with the following setup:
 
 ```

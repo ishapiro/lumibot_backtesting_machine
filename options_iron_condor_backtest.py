@@ -17,8 +17,8 @@ Based on: Lumibot Condor Example
 NOTE: The current version assumes only one condor is open at a time!!!
 NOTE: Maximum margin is not enforced!!!
 
-This parameterized Iron Condor Test is desgined to facilitate testing condors across a range of names, d
-eltas and expiration dates.
+This parameterized Iron Condor Test is desgined to facilitate testing condors across a range of names,
+deltas and expiration dates.
 
 Future version:  In the future this will be undated so it can be invoked from a Flask web
 framework with the input parameters available via an html form and the out files available
