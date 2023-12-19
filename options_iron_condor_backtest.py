@@ -7,6 +7,8 @@ from lumibot.strategies.strategy import Strategy
 from credentials import POLYGON_CONFIG
 from lumibot.backtesting import PolygonDataBacktesting
 
+import pandas_market_calendars as mcal
+
 """
 Strategy Description
 
@@ -118,9 +120,7 @@ class OptionsIronCondor(Strategy):
         # if we are below the capital threshold
         if self.first_iteration:
             # Get next 3rd Friday expiry after the date
-            expiry = self.get_option_expiration_after_date(
-                dt + timedelta(days=days_to_expiry)
-            )
+            expiry = self.get_next_expiration_date(days_to_expiry)
 
             # Create the condor
             call_strike, put_strike = self.create_condor(
@@ -214,9 +214,7 @@ class OptionsIronCondor(Strategy):
             self.sleep(1)
 
             # Get closest 3rd Friday expiry
-            new_expiry = self.get_option_expiration_after_date(
-                dt + timedelta(days=days_to_expiry)
-            )
+            new_expiry = self.get_next_expiration_date(days_to_expiry)
 
             # Create a new condor
             call_strike, put_strike = self.create_condor(
@@ -256,9 +254,7 @@ class OptionsIronCondor(Strategy):
                                 position_strike: position_strike")
 
             # Get closest 3rd Friday expiry
-            roll_expiry = self.get_option_expiration_after_date(
-                dt + timedelta(days=days_to_expiry)
-            )
+            roll_expiry = self.get_next_expiration_date(days_to_expiry)
 
             # Create a new condor
             call_strike, put_strike = self.create_condor(
@@ -491,13 +487,42 @@ class OptionsIronCondor(Strategy):
                 break
 
         return strike_deltas
+    
+    def check_market_date( self, expiry):
+        # Get the market calendar for a range around the expiry date
+        nyse = mcal.get_calendar("NYSE")
+        start_date = expiry - timedelta(days=7)
+        end_date = expiry + timedelta(days=7)
+        market_schedule = nyse.schedule(start_date=start_date, end_date=end_date)
+
+        # Get the list of market open days from the market schedule
+        market_open_days = market_schedule["market_open"].dt.date.tolist()
+        if expiry in market_open_days:
+            return True
+        else:
+            return False
+        
+    def get_next_expiration_date(self, days_to_expiration):
+        dt = self.get_datetime()
+        suggested_date = self.get_option_expiration_after_date(
+            dt + timedelta(days=days_to_expiration)
+        )
+        return suggested_date
+    
+        # debug
+        # if self.check_market_date(suggested_date):
+        #     return suggested_date
+        # else:
+        #     suggested_date - timedelta(days=-1)
+
+        #     expiry += timedelta(days=1)
 
 
 if __name__ == "__main__":
         # Backtest this strategy
         backtesting_start = datetime(2022, 1, 3)
         # backtesting_start = datetime(2020, 1, 1)
-        backtesting_end = datetime(2023, 12, 31)
+        backtesting_end = datetime(2022, 6, 30)
 
         trading_fee = TradingFee(percent_fee=0.003)  # IMS closer to .60 per leg
 
