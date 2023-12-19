@@ -19,9 +19,9 @@ Days to expiration
 Delta of the shorts
 Spacing of wings -- wings are equally spaced based on dollars not delta
 Days before expiration to exit the trade
-Roll conditions
+When to roll one of the spreads
 
-Key values
+Explaination of Iron Condor Parameters:
 
     Condor Example
     
@@ -55,6 +55,13 @@ class OptionsIronCondor(Strategy):
         "strike_roll_distance" : .80 * distance_of_wings # How close to the short do we allow the price to move before rolling.
     }
 
+    # The Lumibot framework does not current track margin requirements.  For this strategy
+    # we will track margin manually using the following approximation in an instance variable.
+    #
+    # margin reserve = distance of wings - condor credit
+    #
+
+    margin_reserve = 0
 
     strategy_name = f'iron_condor_{parameters["delta_required"]}delta-{parameters["days_to_expiry"]}expiry-{parameters["days_before_expiry_to_buy_back"]}exit'
 
@@ -108,6 +115,12 @@ class OptionsIronCondor(Strategy):
             self.create_condor(
                 symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings
             )
+            # Reserve the margin
+
+            self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * self.quantity_to_trade)  # IMS need to update to reduce by credit
+
+            # Add marker to the chart
+            self.add_marker(f"Create 1st New Condor, current margin: {self.margin_reserve}", value=underlying_price, color="green")
             return
 
         # Get all the open positions
@@ -169,6 +182,8 @@ class OptionsIronCondor(Strategy):
             # Sell all of our positions
             self.sell_all()
 
+            self.margin_reserve = self.margin_reserve - (distance_of_wings * 100 * self.quantity_to_trade)  # IMS need to update to reduce by credit
+
             # Sleep for 5 seconds to make sure the order goes through
             # IMS do we need this in a backtest?
             # self.sleep(5)
@@ -183,20 +198,24 @@ class OptionsIronCondor(Strategy):
                 symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings
             )
 
+            self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * self.quantity_to_trade)  # IMS need to update to reduce by credit
+
             # Add marker to the chart
-            self.add_marker("New Condor", value=underlying_price, color="green")
+            self.add_marker(f"Create New Condor: margin reserve {self.margin_reserve}", value=underlying_price, color="green")
 
         # If we need to roll the option
         elif crossed_threshold_up or crossed_threshold_down:
             # Sell all of our positions
             self.sell_all()
 
+            self.margin_reserve = self.margin_reserve - (distance_of_wings * 100 * self.quantity_to_trade)  # IMS need to update to reduce by credit
+
             # Sleep for 5 seconds to make sure the order goes through
             # IMS do we need this in a backtest?
             # self.sleep(5)
 
             # Add marker to the chart
-            self.add_marker("Sell", value=underlying_price, color="red")
+            self.add_marker(f"Close Out Condor: margin reserve: {self.margin_reserve}", value=underlying_price, color="purple")
 
             # Reset the wait counter
             self.cycles_waited = 0
@@ -425,7 +444,7 @@ if __name__ == "__main__":
         # Backtest this strategy
         backtesting_start = datetime(2022, 1, 3)
         # backtesting_start = datetime(2020, 1, 1)
-        backtesting_end = datetime(2022, 6, 30)
+        backtesting_end = datetime(2023, 12, 01)
 
         trading_fee = TradingFee(percent_fee=0.003)  # IMS closer to .60 per leg
 
@@ -442,3 +461,4 @@ if __name__ == "__main__":
             name=OptionsIronCondor.strategy_name,
             budget = OptionsIronCondor.parameters["budget"],
         )
+ 
