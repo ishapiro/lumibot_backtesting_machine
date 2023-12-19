@@ -14,7 +14,7 @@ Author: Irv Shapiro (ishapiro@cogitations.com)
 
 Based on: Lumibot Condor Example
 
-NOTE: The current version assume only one condor is open at a time!!!
+NOTE: The current version assumes only one condor is open at a time!!!
 NOTE: Maximum margin is not enforced!!!
 
 This parameterized Iron Condor Test is desgined to facilitate testing condors across a range of names, d
