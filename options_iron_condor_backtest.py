@@ -149,13 +149,14 @@ class OptionsIronCondor(Strategy):
                     should_sell_for_expiry = True
                     break
 
+                # IMS roll when we are within a range of the short strikes
+                call_short_strike_boundary = position.asset.strike - strike_roll_distance
+                put_short_strike_boundary = position.asset.strike + strike_roll_distance
+
                 # Check if it's a short position
                 if position.quantity < 0:
                     # Check the delta of the option
-                    # IMS greeks = self.get_greeks(position.asset)
-
-                    call_short_strike_boundary = position.asset.strike - strike_roll_distance
-                    put_short_strike_boundary = position.asset.strike + strike_roll_distance
+                    # IMS NO longer used -- greeks = self.get_greeks(position.asset)
 
                     # Check if the option is a call
                     if position.asset.right == "CALL":
@@ -176,9 +177,7 @@ class OptionsIronCondor(Strategy):
                             break
 
         # If we need to sell for expiry
-        if (
-            should_sell_for_expiry or not own_options
-        ) and self.cycles_waited > wait_cycles_after_threshold_cross:
+        if (should_sell_for_expiry):
             # Sell all of our positions
             self.sell_all()
 
@@ -208,6 +207,13 @@ class OptionsIronCondor(Strategy):
 
         # If we need to roll the option
         elif crossed_threshold_up or crossed_threshold_down:
+            # Create roll message
+            roll_message = ""
+            if (crossed_threshold_up):
+                roll_message = "Roll for approaching short strike: "
+            if (crossed_threshold_down):
+                roll_message = "Roll for approaching put strike: "
+
             # Sell all of our positions
             self.sell_all()
 
@@ -218,7 +224,7 @@ class OptionsIronCondor(Strategy):
             # self.sleep(5)
 
             # Add marker to the chart
-            self.add_marker(f"Close for Roll Condor: margin reserve: {self.margin_reserve}", value=underlying_price, color="yellow")
+            self.add_marker(f"Close for Roll, {roll_message} Margin reserve: {self.margin_reserve}", value=underlying_price, color="yellow")
 
             # Get closest 3rd Friday expiry
             expiry = self.get_option_expiration_after_date(
@@ -233,7 +239,7 @@ class OptionsIronCondor(Strategy):
             self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
 
             # Add marker to the chart
-            self.add_marker(f"Roll Condor: margin reserve {self.margin_reserve}", value=underlying_price, color="purple")
+            self.add_marker(f"Rolled Condor: margin reserve {self.margin_reserve}", value=underlying_price, color="purple")
 
             # Reset the wait counter
             self.cycles_waited = 0
@@ -462,7 +468,7 @@ if __name__ == "__main__":
         # Backtest this strategy
         backtesting_start = datetime(2022, 1, 3)
         # backtesting_start = datetime(2020, 1, 1)
-        backtesting_end = datetime(2023, 12, 1)
+        backtesting_end = datetime(2022, 6, 30)
 
         trading_fee = TradingFee(percent_fee=0.003)  # IMS closer to .60 per leg
 
