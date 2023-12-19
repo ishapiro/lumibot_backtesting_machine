@@ -10,8 +10,19 @@ from lumibot.backtesting import PolygonDataBacktesting
 """
 Strategy Description
 
-This parameterized Iron Condor Test is desgined for execution within a Flask web framework to 
-facilitate testing condors across a range of names, deltas and expiration dates.
+Author: Irv Shapiro (ishapiro@cogitations.com)
+
+Based on: Lumibot Condor Example
+
+NOTE: The current version assume only one condor is open at a time!!!
+NOTE: Maximum margin is not enforced!!!
+
+This parameterized Iron Condor Test is desgined to facilitate testing condors across a range of names, d
+eltas and expiration dates.
+
+Future version:  In the future this will be undated so it can be invoked from a Flask web
+framework with the input parameters available via an html form and the out files available
+via a browser.
 
 Key user defined parameters:
 
@@ -120,11 +131,8 @@ class OptionsIronCondor(Strategy):
             self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
 
             # Add marker to the chart
-            self.add_marker(f"Create 1st New Condor, current margin: {self.margin_reserve}", value=underlying_price, color="green"                            
-                                detail_text=f"Expiry: {expiry}\n\
-                                Underlying price: {underlying_price}\n\                               
-                                call strike: {call_strike}\n\
-                                put_strike: {put_strike}")
+            self.add_marker(f"Create 1st New Condor, current margin: {self.margin_reserve}", value=underlying_price, color="green", 
+                                detail_text=f"Expiry: {expiry}\nUnderlying price: {underlying_price}\ncall strike: {call_strike}\nput_strike: {put_strike}")
             return
 
         # Get all the open positions
@@ -218,11 +226,7 @@ class OptionsIronCondor(Strategy):
             self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
 
             # Add marker to the chart
-            self.add_marker(f"Create New Condor: margin reserve {self.margin_reserve}", value=underlying_price, color="green",
-                            detail_text=f"New Expiry: {new_expiry}\n\
-                                Underlying price: {underlying_price}\n\                               
-                                call strike: {call_strike}\n\
-                                put_strike: {put_strike}")
+            self.add_marker(f"Create New Condor: margin reserve {self.margin_reserve}", value=underlying_price, color="green",detail_text=f"New Expiry: {new_expiry}\nUnderlying price: {underlying_price}\ncall strike: {call_strike}\nput_strike: {put_strike}")
 
         # If we need to roll the option
         elif roll_call_short or roll_put_short:
@@ -234,6 +238,9 @@ class OptionsIronCondor(Strategy):
                 roll_message = "Roll for approaching put strike: "
 
             # Sell all of our positions
+            # IMS this need to be changed to only roll one of the spreads and not create a new condor
+            # IMS sell all will close ALL postions, we need to upgrade to only close the current position
+            #   to handle multiple open condors at one time
             self.sell_all()
 
             self.margin_reserve = self.margin_reserve - (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
@@ -254,7 +261,7 @@ class OptionsIronCondor(Strategy):
             )
 
             # Create a new condor
-            call_strike, put_strike = call_strike, put_strike = call_strike, put_strike = self.create_condor(
+            call_strike, put_strike = self.create_condor(
                 symbol, roll_expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings
             )
 
@@ -262,10 +269,7 @@ class OptionsIronCondor(Strategy):
 
             # Add marker to the chart
             self.add_marker(f"Rolled Condor: margin reserve {self.margin_reserve}", value=underlying_price, color="purple",
-                            detail_text=f"New Expiry: {roll_expiry}\n\
-                                Underlying price: {underlying_price}\n\                               
-                                call strike: {call_strike}\n\
-                                put_strike: {put_strike}")
+                            detail_text=f"New Expiry: {roll_expiry}\nUnderlying price: {underlying_price}\ncall strike: {call_strike}\nput_strike: {put_strike}")
 
     def create_condor(
         self, symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings
