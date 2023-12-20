@@ -90,6 +90,8 @@ class OptionsIronCondor(Strategy):
         # Initialize the wait counter
         self.cycles_waited = 0
 
+        self.non_existing_expiry_dates = []
+
     def on_trading_iteration(self):
         # Get the parameters
         symbol = self.parameters["symbol"]
@@ -109,6 +111,7 @@ class OptionsIronCondor(Strategy):
 
         # Get the price of the underlying asset
         underlying_price = self.get_last_price(symbol)
+        rounded_underlying_price = round(underlying_price, 0)
 
         # Add lines to the chart
         self.add_line(f"{symbol}_price", underlying_price)
@@ -124,7 +127,7 @@ class OptionsIronCondor(Strategy):
         # if we are below the capital threshold
         if self.first_iteration:
             # Get next 3rd Friday expiry after the date
-            expiry = self.get_next_expiration_date(days_to_expiry)
+            expiry = self.get_next_expiration_date(days_to_expiry, symbol, rounded_underlying_price)
 
             # Create the condor
             call_strike, put_strike = self.create_condor(
@@ -218,7 +221,7 @@ class OptionsIronCondor(Strategy):
             self.sleep(1)
 
             # Get closest 3rd Friday expiry
-            new_expiry = self.get_next_expiration_date(days_to_expiry)
+            new_expiry = self.get_next_expiration_date(days_to_expiry, symbol, rounded_underlying_price)
 
             # Create a new condor
             call_strike, put_strike = self.create_condor(
@@ -255,10 +258,10 @@ class OptionsIronCondor(Strategy):
             self.add_marker(f"Close for Roll, {roll_message} Margin reserve: {self.margin_reserve}", value=underlying_price, color="yellow",
                             detail_text=f"day_to_expiry: {days_to_expiry}\n\
                                 underlying_price: {underlying_price}\n\
-                                position_strike: position_strike")
+                                position_strike: {position_strike}")
 
             # Get closest 3rd Friday expiry
-            roll_expiry = self.get_next_expiration_date(days_to_expiry)
+            roll_expiry = self.get_next_expiration_date(days_to_expiry, symbol, rounded_underlying_price)
 
             # Create a new condor
             call_strike, put_strike = self.create_condor(
@@ -478,6 +481,8 @@ class OptionsIronCondor(Strategy):
             )
             greeks = self.get_greeks(asset)
 
+            # Check if greeks 
+
             strike_deltas[strike] = greeks["delta"]
 
             if (
@@ -492,50 +497,48 @@ class OptionsIronCondor(Strategy):
 
         return strike_deltas
     
-    def check_market_date( self, expiry):
-        # Get the market calendar for a range around the expiry date
-        # nyse = mcal.get_calendar("NYSE")
-        # start_date = expiry - timedelta(days=7)
-        # end_date = expiry + timedelta(days=7)
-        # market_schedule = nyse.schedule(start_date=start_date, end_date=end_date)
+    def search_next_market_date( self, expiry, symbol, rounded_underlying_price):
+        # Check if there is an option with this expiry (in case it's a holiday or weekend)
+        while True:
+            # Check if we already know that this expiry doesn't exist
+            if expiry in self.non_existing_expiry_dates:
+                # Increase the expiry by one day
+                expiry += timedelta(days=1)
+                continue
 
-        # # Get the list of market open days from the market schedule
-        # market_open_days = market_schedule["market_open"].dt.date.tolist()
-        # if expiry in market_open_days:
-        #     return True
-        # else:
-        #     return False
+            # Create the asset
+            asset = Asset(
+                symbol,
+                asset_type="option",
+                expiration=expiry,
+                strike=rounded_underlying_price,
+                right="call",
+            )
 
-        # temp = expiry
-        # print (f"Temp: {temp}")
-        # contracts = OptionsIronCondor.polygon_client.list_options_contracts(underlying_ticker="SPY",
-        #                 expiration_date=expiry,
-        #                 expired=True,
-        #                 limit=5)
-        # for next_contract in contracts:
-        #     if next_contract.expiration_date:
-        #         print (next_contract.expiration_date,)
-        #         return True
-        #     else:
-        #         return False
+            # Get the price of the option
+            price = self.get_last_price(asset)
 
-        return True
+            # If we got the price, then break because this expiry is valid
+            if price is not None:
+                break
+
+            # Add the expiry to the list of non existing expiry dates
+            self.non_existing_expiry_dates.append(expiry)
+
+            # If we didn't get the price, then move the expiry forward by one day and try again
+            expiry += timedelta(days=1)
+
+        return expiry
         
-    def get_next_expiration_date(self, days_to_expiration):
+    def get_next_expiration_date(self, days_to_expiration, symbol, strike_price):
         dt = self.get_datetime()
-        suggested_date = self.get_option_expiration_after_date(
-            dt + timedelta(days=days_to_expiration)
-        )
-    
-        if self.check_market_date(suggested_date):
-            return suggested_date
-        else:
-            return suggested_date - timedelta(days=-1)
-
+        suggested_date = self.get_option_expiration_after_date(dt + timedelta(days=days_to_expiration))
+        return self.search_next_market_date(suggested_date, symbol, strike_price)
+            
 
 if __name__ == "__main__":
         # Backtest this strategy
-        backtesting_start = datetime(2022, 1, 3)
+        backtesting_start = datetime(2022, 3, 1)
         # backtesting_start = datetime(2020, 1, 1)
         backtesting_end = datetime(2022, 6, 30)
 
