@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import datetime as dtime
 
 from lumibot.entities import Asset, TradingFee
 from lumibot.strategies.strategy import Strategy
@@ -75,7 +76,6 @@ class OptionsIronCondor(Strategy):
     #
     # margin reserve = distance of wings - condor credit
     #
-
     margin_reserve = 0
 
     strategy_name = f'iron_condor_{parameters["delta_required"]}delta-{parameters["days_to_expiry"]}expiry-{parameters["days_before_expiry_to_buy_back"]}exit'
@@ -129,17 +129,27 @@ class OptionsIronCondor(Strategy):
             # Get next 3rd Friday expiry after the date
             expiry = self.get_next_expiration_date(days_to_expiry, symbol, rounded_underlying_price)
 
+            break_date = dtime.date(2022, 3, 18)
+            if expiry == break_date:
+                print("break")
+
             # Create the condor
             call_strike, put_strike = self.create_condor(
                 symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings
             )
+
             # Reserve the margin
 
             self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
 
             # Add marker to the chart
-            self.add_marker(f"Create 1st New Condor, current margin: {self.margin_reserve}", value=underlying_price, color="green", 
-                                detail_text=f"Expiry: {expiry}\nUnderlying price: {underlying_price}\ncall strike: {call_strike}\nput_strike: {put_strike}")
+            self.add_marker(
+                f"Create 1st New Condor, current margin: {self.margin_reserve}",
+                value=underlying_price,
+                color="green",
+                symbol="triangle-up",
+                detail_text=f"Expiry: {expiry}\nUnderlying price: {underlying_price}\ncall strike: {call_strike}\nput_strike: {put_strike}"
+            )
             return
 
         # Get all the open positions
@@ -210,18 +220,24 @@ class OptionsIronCondor(Strategy):
 
             self.margin_reserve = self.margin_reserve - (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
 
-            # Add marker to the chart
-            self.add_marker(f"Close Condor for Days to Expiry: margin reserve {self.margin_reserve}", value=underlying_price, color="red",
-                            detail_text=f"day_to_expiry: {days_to_expiry}\n\
-                            underlying_price: {underlying_price}\n\
-                            position_strike: {position_strike}")
+            self.add_marker(
+                f"Close Condor for Days to Expiry: margin reserve {self.margin_reserve}",
+                value=underlying_price,
+                color="orange",
+                symbol="triangle-down",
+                detail_text=f"day_to_expiry: {days_to_expiry}\nunderlying_price: {underlying_price}\nposition_strike: {position_strike}"
+            )
 
             # Sleep for 5 seconds to make sure the order goes through
-            # IMS do we need this in a backtest?
-            self.sleep(1)
+            # IMS Only sleep when live, this sleep function will no-opt in a backtest
+            self.sleep(5)
 
             # Get closest 3rd Friday expiry
             new_expiry = self.get_next_expiration_date(days_to_expiry, symbol, rounded_underlying_price)
+
+            break_date = dtime.date(2022, 3, 18)
+            if new_expiry == break_date:
+                print("break")
 
             # Create a new condor
             call_strike, put_strike = self.create_condor(
@@ -231,7 +247,13 @@ class OptionsIronCondor(Strategy):
             self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
 
             # Add marker to the chart
-            self.add_marker(f"Create New Condor: margin reserve {self.margin_reserve}", value=underlying_price, color="green",detail_text=f"New Expiry: {new_expiry}\nUnderlying price: {underlying_price}\ncall strike: {call_strike}\nput_strike: {put_strike}")
+            self.add_marker(
+                f"Create New Condor: margin reserve {self.margin_reserve}",
+                value=underlying_price,
+                color="green",
+                symbol="triangle-up",
+                detail_text=f"New Expiry: {new_expiry}\nUnderlying price: {underlying_price}\ncall strike: {call_strike}\nput_strike: {put_strike}"
+            )
 
         # If we need to roll the option
         elif roll_call_short or roll_put_short:
@@ -255,13 +277,22 @@ class OptionsIronCondor(Strategy):
             self.sleep(1)
 
             # Add marker to the chart
-            self.add_marker(f"Close for Roll, {roll_message} Margin reserve: {self.margin_reserve}", value=underlying_price, color="yellow",
-                            detail_text=f"day_to_expiry: {days_to_expiry}\n\
-                                underlying_price: {underlying_price}\n\
-                                position_strike: {position_strike}")
+            self.add_marker(
+                f"Close for Roll, {roll_message} Margin reserve: {self.margin_reserve}",
+                value=underlying_price,
+                color="yellow",
+                symbol="triangle-down",
+                detail_text=f"day_to_expiry: {days_to_expiry}\n\
+                    underlying_price: {underlying_price}\n\
+                    position_strike: {position_strike}"
+            )
 
             # Get closest 3rd Friday expiry
             roll_expiry = self.get_next_expiration_date(days_to_expiry, symbol, rounded_underlying_price)
+
+            break_date = dtime.date(2022, 3, 18)
+            if roll_expiry == break_date:
+                print("break")
 
             # Create a new condor
             call_strike, put_strike = self.create_condor(
@@ -271,12 +302,24 @@ class OptionsIronCondor(Strategy):
             self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
 
             # Add marker to the chart
-            self.add_marker(f"Rolled Condor: margin reserve {self.margin_reserve}", value=underlying_price, color="purple",
-                            detail_text=f"New Expiry: {roll_expiry}\nUnderlying price: {underlying_price}\ncall strike: {call_strike}\nput_strike: {put_strike}")
+            self.add_marker(
+                f"Rolled Condor: margin reserve {self.margin_reserve}",
+                value=underlying_price,
+                color="purple",
+                symbol="triangle-up",    
+                detail_text=f"New Expiry: {roll_expiry}\nUnderlying price: {underlying_price}\ncall strike: {call_strike}\nput_strike: {put_strike}"
+            )
 
     def create_condor(
         self, symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings
     ):
+
+        break_date = dtime.date(2022, 3, 18)
+        if expiry == break_date:
+            print("break")
+
+        print(f"Creating condor for {symbol} with expiry {expiry}")
+        
         # Get the current price of the underlying asset
         underlying_price = self.get_last_price(symbol)
 
@@ -479,21 +522,34 @@ class OptionsIronCondor(Strategy):
                 strike=strike,
                 right=right,
             )
-            greeks = self.get_greeks(asset)
 
-            # Check if greeks 
+            try:
+                # Get the greeks for the asset
+                greeks = self.get_greeks(asset)
+            except:
+                greeks = None
 
-            strike_deltas[strike] = greeks["delta"]
+            if greeks is not None:
+                strike_deltas[strike] = greeks["delta"]
+                if (
+                    stop_greater_than
+                    and greeks["delta"]
+                    and greeks["delta"] >= stop_greater_than
+                ):
+                    break
 
-            if (
-                stop_greater_than
-                and greeks["delta"]
-                and greeks["delta"] >= stop_greater_than
-            ):
-                break
-
-            if stop_less_than and greeks["delta"] and greeks["delta"] <= stop_less_than:
-                break
+                if (
+                    stop_less_than
+                    and greeks["delta"] 
+                    and greeks["delta"] <= stop_less_than
+                ):
+                    break
+            else: 
+                # IMS This will force the delta out of range for the trade
+                if stop_greater_than:
+                    strike_deltas[strike] = 9999
+                if stop_less_than:
+                    strike_deltas[strike] = -9999
 
         return strike_deltas
     
@@ -538,9 +594,9 @@ class OptionsIronCondor(Strategy):
 
 if __name__ == "__main__":
         # Backtest this strategy
-        backtesting_start = datetime(2022, 3, 1)
+        backtesting_start = datetime(2022, 1, 1)
         # backtesting_start = datetime(2020, 1, 1)
-        backtesting_end = datetime(2022, 6, 30)
+        backtesting_end = datetime(2022, 12, 31)
 
         trading_fee = TradingFee(percent_fee=0.003)  # IMS closer to .60 per leg
 
