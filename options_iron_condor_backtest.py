@@ -506,15 +506,20 @@ class OptionsIronCondor(Strategy):
         # else:
         #     return False
 
-        contracts = OptionsIronCondor.polygon_client.list_options_contracts(underlying_ticker="SPY",
-                        expiration_date_eq=expiry.date(),
-                        expired=True,
-                        limit=5)
-        
-        if contracts:
-            return True
-        else:
-            return False
+        # temp = expiry
+        # print (f"Temp: {temp}")
+        # contracts = OptionsIronCondor.polygon_client.list_options_contracts(underlying_ticker="SPY",
+        #                 expiration_date=expiry,
+        #                 expired=True,
+        #                 limit=5)
+        # for next_contract in contracts:
+        #     if next_contract.expiration_date:
+        #         print (next_contract.expiration_date,)
+        #         return True
+        #     else:
+        #         return False
+
+        return True
         
     def get_next_expiration_date(self, days_to_expiration):
         dt = self.get_datetime()
