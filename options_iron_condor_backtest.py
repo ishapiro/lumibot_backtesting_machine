@@ -7,7 +7,9 @@ from lumibot.strategies.strategy import Strategy
 from credentials import POLYGON_CONFIG
 from lumibot.backtesting import PolygonDataBacktesting
 
+# Trying different ways to varify dates before handing to Lumibot
 import pandas_market_calendars as mcal
+from polygon import RESTClient
 
 """
 Strategy Description
@@ -78,6 +80,8 @@ class OptionsIronCondor(Strategy):
 
     strategy_name = f'iron_condor_{parameters["delta_required"]}delta-{parameters["days_to_expiry"]}expiry-{parameters["days_before_expiry_to_buy_back"]}exit'
 
+    # IMS Used to test for valid dates and data while debugging
+    polygon_client = RESTClient(api_key=POLYGON_CONFIG["API_KEY"])
 
     def initialize(self):
         # The time to sleep between each trading iteration
@@ -490,14 +494,24 @@ class OptionsIronCondor(Strategy):
     
     def check_market_date( self, expiry):
         # Get the market calendar for a range around the expiry date
-        nyse = mcal.get_calendar("NYSE")
-        start_date = expiry - timedelta(days=7)
-        end_date = expiry + timedelta(days=7)
-        market_schedule = nyse.schedule(start_date=start_date, end_date=end_date)
+        # nyse = mcal.get_calendar("NYSE")
+        # start_date = expiry - timedelta(days=7)
+        # end_date = expiry + timedelta(days=7)
+        # market_schedule = nyse.schedule(start_date=start_date, end_date=end_date)
 
-        # Get the list of market open days from the market schedule
-        market_open_days = market_schedule["market_open"].dt.date.tolist()
-        if expiry in market_open_days:
+        # # Get the list of market open days from the market schedule
+        # market_open_days = market_schedule["market_open"].dt.date.tolist()
+        # if expiry in market_open_days:
+        #     return True
+        # else:
+        #     return False
+
+        contracts = OptionsIronCondor.polygon_client.list_options_contracts(underlying_ticker="SPY",
+                        expiration_date_eq=expiry.date(),
+                        expired=True,
+                        limit=5)
+        
+        if contracts:
             return True
         else:
             return False
