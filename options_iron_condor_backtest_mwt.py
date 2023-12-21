@@ -9,9 +9,23 @@ from credentials import POLYGON_CONFIG
 from lumibot.backtesting import PolygonDataBacktesting
 
 """
+Disclaimer: The options strategies presented within this content are intended for educational purposes only. They are not meant to be used for trading live stocks or any other financial instruments. The information provided is based on historical data and hypothetical scenarios, and it does not guarantee future results or profits.
+
+Trading stocks and options involve substantial risks and may result in the loss of your invested capital. It is essential to conduct thorough research, seek advice from a qualified financial professional, and carefully consider your risk tolerance before engaging in any trading activities.
+
+The strategies discussed in this content should not be regarded as recommendations or endorsements. The market conditions, regulations, and individual circumstances can significantly impact the outcome of any trading strategy. Therefore, it is crucial to understand that every investment decision carries its own risks, and you should exercise caution and diligence when applying any information provided herein.
+
+By accessing and utilizing the information presented, you acknowledge that you are solely responsible for any trading decisions you make. Neither the author nor any associated parties shall be held liable for any losses, damages, or consequences arising from the use of the strategies discussed in this content.
+
+Always remember that trading in the financial markets involves inherent risks, and it is recommended to seek professional advice and conduct thorough analysis before making any investment decisions.
+"""
+
+
+"""
 Strategy Description
 
 Author: Irv Shapiro (ishapiro@cogitations.com)
+YouTube: MakeWithTech
 
 Based on: Lumibot Condor Example
 
@@ -50,12 +64,12 @@ Explaination of Iron Condor Parameters:
 """
 
 
-class OptionsIronCondor(Strategy):
+class OptionsIronCondorMWT(Strategy):
 
     distance_of_wings = 15 # reference in multiple parameters below, in dollars not strikes
     parameters = {
         "symbol": "SPY",
-        "days_to_expiry": 40,  # How many days until the call option expires when we sell it
+        "option_duration": 40,  # How many days until the call option expires when we sell it
         "strike_step_size": 1,  # IMS Is this the strike spacing of the specific asset, can we get this from Poloygon?
         "delta_required": 0.15,  # The delta of the option we want to sell
         "delta_threshold": 1,  # The delta of the option when we need to buy it back
@@ -74,7 +88,7 @@ class OptionsIronCondor(Strategy):
     #
     margin_reserve = 0
 
-    strategy_name = f'iron_condor_{parameters["delta_required"]}delta-{parameters["days_to_expiry"]}expiry-{parameters["days_before_expiry_to_buy_back"]}exit'
+    strategy_name = f'ic_{parameters["delta_required"]}delta-{parameters["option_duration"]}duration-{parameters["days_before_expiry_to_buy_back"]}exit'
 
     def initialize(self):
         # The time to sleep between each trading iteration
@@ -88,7 +102,7 @@ class OptionsIronCondor(Strategy):
     def on_trading_iteration(self):
         # Get the parameters
         symbol = self.parameters["symbol"]
-        days_to_expiry = self.parameters["days_to_expiry"]
+        option_duration = self.parameters["option_duration"]
         strike_step_size = self.parameters["strike_step_size"]
         delta_required = self.parameters["delta_required"]
         delta_threshold = self.parameters["delta_threshold"]
@@ -120,7 +134,7 @@ class OptionsIronCondor(Strategy):
         # if we are below the capital threshold
         if self.first_iteration:
             # Get next 3rd Friday expiry after the date
-            expiry = self.get_next_expiration_date(days_to_expiry, symbol, rounded_underlying_price)
+            expiry = self.get_next_expiration_date(option_duration, symbol, rounded_underlying_price)
 
             break_date = dtime.date(2022, 3, 18)
             if expiry == break_date:
@@ -159,7 +173,6 @@ class OptionsIronCondor(Strategy):
         roll_put_short = False
         should_sell_for_expiry = False
         option_expiry = None
-        days_to_expiry = None
 
         # Loop through all the positions
         for position in positions:
@@ -233,7 +246,7 @@ class OptionsIronCondor(Strategy):
             self.sleep(5)
 
             # Get closest 3rd Friday expiry
-            new_expiry = self.get_next_expiration_date(days_to_expiry, symbol, rounded_underlying_price)
+            new_expiry = self.get_next_expiration_date(option_duration, symbol, rounded_underlying_price)
 
             break_date = dtime.date(2022, 3, 18)
             if new_expiry == break_date:
@@ -297,7 +310,7 @@ class OptionsIronCondor(Strategy):
             )
 
             # Get closest 3rd Friday expiry
-            roll_expiry = self.get_next_expiration_date(days_to_expiry, symbol, rounded_underlying_price)
+            roll_expiry = self.get_next_expiration_date(option_duration, symbol, rounded_underlying_price)
 
             break_date = dtime.date(2022, 3, 18)
             if roll_expiry == break_date:
@@ -616,9 +629,9 @@ class OptionsIronCondor(Strategy):
 
         return expiry
         
-    def get_next_expiration_date(self, days_to_expiration, symbol, strike_price):
+    def get_next_expiration_date(self, option_duration, symbol, strike_price):
         dt = self.get_datetime()
-        suggested_date = self.get_option_expiration_after_date(dt + timedelta(days=days_to_expiration))
+        suggested_date = self.get_option_expiration_after_date(dt + timedelta(days=option_duration))
         return self.search_next_market_date(suggested_date, symbol, strike_price)
             
 
@@ -630,16 +643,16 @@ if __name__ == "__main__":
         trading_fee = TradingFee(percent_fee=0.003)  # IMS closer to .60 per leg
 
         # polygon_has_paid_subscription is set to true to api calls are not thottled
-        OptionsIronCondor.backtest(
+        OptionsIronCondorMWT.backtest(
             PolygonDataBacktesting,
             backtesting_start,
             backtesting_end,
-            benchmark_asset=OptionsIronCondor.parameters["symbol"],
+            benchmark_asset=OptionsIronCondorMWT.parameters["symbol"],
             buy_trading_fees=[trading_fee],
             sell_trading_fees=[trading_fee],
             polygon_api_key=POLYGON_CONFIG["API_KEY"],
             polygon_has_paid_subscription=True,
-            name=OptionsIronCondor.strategy_name,
-            budget = OptionsIronCondor.parameters["budget"],
+            name=OptionsIronCondorMWT.strategy_name,
+            budget = OptionsIronCondorMWT.parameters["budget"],
         )
  
