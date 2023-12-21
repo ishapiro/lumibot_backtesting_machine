@@ -8,10 +8,6 @@ from lumibot.strategies.strategy import Strategy
 from credentials import POLYGON_CONFIG
 from lumibot.backtesting import PolygonDataBacktesting
 
-# Trying different ways to varify dates before handing to Lumibot
-import pandas_market_calendars as mcal
-from polygon import RESTClient
-
 """
 Strategy Description
 
@@ -79,9 +75,6 @@ class OptionsIronCondor(Strategy):
     margin_reserve = 0
 
     strategy_name = f'iron_condor_{parameters["delta_required"]}delta-{parameters["days_to_expiry"]}expiry-{parameters["days_before_expiry_to_buy_back"]}exit'
-
-    # IMS Used to test for valid dates and data while debugging
-    polygon_client = RESTClient(api_key=POLYGON_CONFIG["API_KEY"])
 
     def initialize(self):
         # The time to sleep between each trading iteration
@@ -523,33 +516,36 @@ class OptionsIronCondor(Strategy):
                 right=right,
             )
 
-            try:
-                # Get the greeks for the asset
+            # Get the last price for this asset
+            price = self.get_last_price(asset)
+
+            if price > 0 and price is not None:
+                # Get the greeks for the asset if it is a valid strike
+                # Invalid strikes will have a price of zero
+                # Invoking get_geeks with an invalid strike will generate an error
                 greeks = self.get_greeks(asset)
-            except:
-                greeks = None
 
-            if greeks is not None:
-                strike_deltas[strike] = greeks["delta"]
-                if (
-                    stop_greater_than
-                    and greeks["delta"]
-                    and greeks["delta"] >= stop_greater_than
-                ):
-                    break
+                if greeks is not None:
+                    strike_deltas[strike] = greeks["delta"]
+                    if (
+                        stop_greater_than
+                        and greeks["delta"]
+                        and greeks["delta"] >= stop_greater_than
+                    ):
+                        break
 
-                if (
-                    stop_less_than
-                    and greeks["delta"] 
-                    and greeks["delta"] <= stop_less_than
-                ):
-                    break
-            else: 
-                # IMS This will force the delta out of range for the trade
-                if stop_greater_than:
-                    strike_deltas[strike] = 9999
-                if stop_less_than:
-                    strike_deltas[strike] = -9999
+                    if (
+                        stop_less_than
+                        and greeks["delta"] 
+                        and greeks["delta"] <= stop_less_than
+                    ):
+                        break
+                else: 
+                    # IMS This will force the delta out of range for the trade
+                    strike_deltas[strike] = 0
+            else:   
+                # IMS This will force the delta out of range for the trade  
+                strike_deltas[strike] = 0
 
         return strike_deltas
     
@@ -596,7 +592,7 @@ if __name__ == "__main__":
         # Backtest this strategy
         backtesting_start = datetime(2022, 1, 1)
         # backtesting_start = datetime(2020, 1, 1)
-        backtesting_end = datetime(2022, 12, 31)
+        backtesting_end = datetime(2023, 12, 15)
 
         trading_fee = TradingFee(percent_fee=0.003)  # IMS closer to .60 per leg
 
