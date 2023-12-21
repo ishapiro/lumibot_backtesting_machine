@@ -139,7 +139,7 @@ class OptionsIronCondor(Strategy):
                     value=underlying_price,
                     color="purple",
                     symbol="triangle-up",    
-                    detail_text=f"Date: {dt}\nExpiration: {roll_expiry}\nLast price: {underlying_price}\ncall short: {call_strike}\nput short: {put_strike}"
+                    detail_text=f"Date: {dt}\nExpiration: {expiry}\nLast price: {underlying_price}\ncall short: {call_strike}\nput short: {put_strike}"
                 )
             else:
                 # Add marker to the chart
@@ -148,7 +148,7 @@ class OptionsIronCondor(Strategy):
                     value=underlying_price,
                     color="blue",
                     symbol="asterisk",
-                    detail_text=f"Date: {dt}\nExpiration: {roll_expiry}\nLast price: {underlying_price}\ncall short: {call_strike}\nput short: {put_strike}"
+                    detail_text=f"Date: {dt}\nExpiration: {expiry}\nLast price: {underlying_price}\ncall short: {call_strike}\nput short: {put_strike}"
                 ) 
             return
 
@@ -240,7 +240,7 @@ class OptionsIronCondor(Strategy):
                 print("break")
 
             # Create a new condor
-            call_strike, put_strike = self.create_condor(
+            condor_status, call_strike, put_strike = self.create_condor(
                 symbol, new_expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings
             )
 
@@ -252,7 +252,7 @@ class OptionsIronCondor(Strategy):
                     value=underlying_price,
                     color="purple",
                     symbol="triangle-up",    
-                    detail_text=f"Date: {dt}\nExpiration: {roll_expiry}\nLast price: {underlying_price}\ncall short: {call_strike}\nput short: {put_strike}"
+                    detail_text=f"Date: {dt}\nExpiration: {new_expiry}\nLast price: {underlying_price}\ncall short: {call_strike}\nput short: {put_strike}"
                 )
             else:
                 # Add marker to the chart
@@ -261,7 +261,7 @@ class OptionsIronCondor(Strategy):
                     value=underlying_price,
                     color="blue",
                     symbol="asterisk",
-                    detail_text=f"Date: {dt}\nExpiration: {roll_expiry}\nLast price: {underlying_price}\ncall short: {call_strike}\nput short: {put_strike}"
+                    detail_text=f"Date: {dt}\nExpiration: {new_expiry}\nLast price: {underlying_price}\ncall short: {call_strike}\nput short: {put_strike}"
                 ) 
 
         # If we need to roll the option
@@ -625,7 +625,7 @@ class OptionsIronCondor(Strategy):
 if __name__ == "__main__":
         # Backtest this strategy
         backtesting_start = datetime(2022, 1, 3)
-        backtesting_end = datetime(2023, 12, 30)
+        backtesting_end = datetime(2023, 12, 20)
 
         trading_fee = TradingFee(percent_fee=0.003)  # IMS closer to .60 per leg
 
