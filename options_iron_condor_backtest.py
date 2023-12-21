@@ -127,22 +127,29 @@ class OptionsIronCondor(Strategy):
                 print("break")
 
             # Create the condor
-            call_strike, put_strike = self.create_condor(
+            condor_status, call_strike, put_strike = self.create_condor(
                 symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings
             )
 
-            # Reserve the margin
-
-            self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
-
-            # Add marker to the chart
-            self.add_marker(
-                f"Create 1st New Condor, current margin: {self.margin_reserve}",
-                value=underlying_price,
-                color="green",
-                symbol="triangle-up",
-                detail_text=f"Expiry: {expiry}\nUnderlying price: {underlying_price}\ncall strike: {call_strike}\nput_strike: {put_strike}"
-            )
+            if condor_status == "success":
+                self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
+                # Add marker to the chart
+                self.add_marker(
+                    f"Created 1st Condor: margin reserve {self.margin_reserve}",
+                    value=underlying_price,
+                    color="purple",
+                    symbol="triangle-up",    
+                    detail_text=f"Date: {dt}\nExpiration: {roll_expiry}\nLast price: {underlying_price}\ncall short: {call_strike}\nput short: {put_strike}"
+                )
+            else:
+                # Add marker to the chart
+                self.add_marker(
+                    f"Create Condor Failed: {condor_status}",
+                    value=underlying_price,
+                    color="blue",
+                    symbol="asterisk",
+                    detail_text=f"Date: {dt}\nExpiration: {roll_expiry}\nLast price: {underlying_price}\ncall short: {call_strike}\nput short: {put_strike}"
+                ) 
             return
 
         # Get all the open positions
@@ -237,16 +244,25 @@ class OptionsIronCondor(Strategy):
                 symbol, new_expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings
             )
 
-            self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
-
-            # Add marker to the chart
-            self.add_marker(
-                f"Create New Condor: margin reserve {self.margin_reserve}",
-                value=underlying_price,
-                color="green",
-                symbol="triangle-up",
-                detail_text=f"New Expiry: {new_expiry}\nUnderlying price: {underlying_price}\ncall strike: {call_strike}\nput_strike: {put_strike}"
-            )
+            if condor_status == "success":
+                self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
+                # Add marker to the chart
+                self.add_marker(
+                    f"New Condor: margin reserve {self.margin_reserve}",
+                    value=underlying_price,
+                    color="purple",
+                    symbol="triangle-up",    
+                    detail_text=f"Date: {dt}\nExpiration: {roll_expiry}\nLast price: {underlying_price}\ncall short: {call_strike}\nput short: {put_strike}"
+                )
+            else:
+                # Add marker to the chart
+                self.add_marker(
+                    f"Roll Failed: {condor_status}",
+                    value=underlying_price,
+                    color="blue",
+                    symbol="asterisk",
+                    detail_text=f"Date: {dt}\nExpiration: {roll_expiry}\nLast price: {underlying_price}\ncall short: {call_strike}\nput short: {put_strike}"
+                ) 
 
         # If we need to roll the option
         elif roll_call_short or roll_put_short:
@@ -288,25 +304,35 @@ class OptionsIronCondor(Strategy):
                 print("break")
 
             # Create a new condor
-            call_strike, put_strike = self.create_condor(
+            condor_status, call_strike, put_strike = self.create_condor(
                 symbol, roll_expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings
             )
 
-            self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
-
-            # Add marker to the chart
-            self.add_marker(
-                f"Rolled Condor: margin reserve {self.margin_reserve}",
-                value=underlying_price,
-                color="purple",
-                symbol="triangle-up",    
-                detail_text=f"New Expiry: {roll_expiry}\nUnderlying price: {underlying_price}\ncall strike: {call_strike}\nput_strike: {put_strike}"
-            )
+            if condor_status == "success":
+                self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
+                # Add marker to the chart
+                self.add_marker(
+                    f"Rolled Condor: margin reserve {self.margin_reserve}",
+                    value=underlying_price,
+                    color="purple",
+                    symbol="triangle-up",    
+                    detail_text=f"Date: {dt}\nExpiration: {roll_expiry}\nLast price: {underlying_price}\ncall short: {call_strike}\nput short: {put_strike}"
+                )
+            else:
+                # Add marker to the chart
+                self.add_marker(
+                    f"Roll Failed: {condor_status}",
+                    value=underlying_price,
+                    color="blue",
+                    symbol="asterisk",
+                    detail_text=f"Date: {dt}\nExpiration: {roll_expiry}\nLast price: {underlying_price}\ncall short: {call_strike}\nput short: {put_strike}"
+                )   
 
     def create_condor(
         self, symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings
     ):
 
+        status = "no condor created"
         break_date = dtime.date(2022, 3, 18)
         if expiry == break_date:
             print("break")
@@ -359,7 +385,12 @@ class OptionsIronCondor(Strategy):
 
         # If we didn't find a call strike or a put strike, return
         if call_strike is None or put_strike is None:
-            return
+            if call_strike is None:
+                status = "no call strike found"
+            if put_strike is None:
+                status = "no put strike found"
+            
+            return status, call_strike, put_strike
 
         # Make 3 attempts to create the call side of the condor
         call_strike_adjustment = 0
@@ -409,7 +440,8 @@ class OptionsIronCondor(Strategy):
             or put_sell_order is None
             or put_buy_order is None
         ):
-            return
+            status = "no condor placed"
+            return status, call_strike, put_strike
 
         # Submit the orders
         self.submit_order(call_sell_order)
@@ -417,7 +449,8 @@ class OptionsIronCondor(Strategy):
         self.submit_order(put_sell_order)
         self.submit_order(put_buy_order)
 
-        return call_strike, put_strike
+        status = "success"
+        return status, call_strike, put_strike
 
     def get_put_orders(
         self, symbol, expiry, strike_step_size, put_strike, quantity_to_trade, distance_of_wings
@@ -519,7 +552,7 @@ class OptionsIronCondor(Strategy):
             # Get the last price for this asset
             price = self.get_last_price(asset)
 
-            if price > 0 and price is not None:
+            if price is not None and price > 0:
                 # Get the greeks for the asset if it is a valid strike
                 # Invalid strikes will have a price of zero
                 # Invoking get_geeks with an invalid strike will generate an error
@@ -542,10 +575,11 @@ class OptionsIronCondor(Strategy):
                         break
                 else: 
                     # IMS This will force the delta out of range for the trade
-                    strike_deltas[strike] = 0
+                    # Do not set to 0 as this will create divide by zero errors in lumibot
+                    strike_deltas[strike] = 0.001
             else:   
                 # IMS This will force the delta out of range for the trade  
-                strike_deltas[strike] = 0
+                strike_deltas[strike] = 0.001
 
         return strike_deltas
     
@@ -590,9 +624,8 @@ class OptionsIronCondor(Strategy):
 
 if __name__ == "__main__":
         # Backtest this strategy
-        backtesting_start = datetime(2022, 1, 1)
-        # backtesting_start = datetime(2020, 1, 1)
-        backtesting_end = datetime(2023, 12, 15)
+        backtesting_start = datetime(2022, 1, 3)
+        backtesting_end = datetime(2023, 12, 30)
 
         trading_fee = TradingFee(percent_fee=0.003)  # IMS closer to .60 per leg
 
