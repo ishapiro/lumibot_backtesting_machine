@@ -72,10 +72,9 @@ class OptionsIronCondorMWT(Strategy):
         "option_duration": 40,  # How many days until the call option expires when we sell it
         "strike_step_size": 1,  # IMS Is this the strike spacing of the specific asset, can we get this from Poloygon?
         "delta_required": 0.15,  # The delta of the option we want to sell
-        "delta_threshold": 1,  # The delta of the option when we need to buy it back
         "days_before_expiry_to_buy_back": 7,  # How many days before expiry to buy back the call
         "quantity_to_trade": 10,  # The number of contracts to trade
-        "wait_cycles_after_threshold_cross": 10,  # The number minium number days to wait before exiting a strategy -- this strategy only trades once a day
+        "minimum_hold_period": 5,  # The number minium number days to wait before exiting a strategy -- this strategy only trades once a day
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
         "budget" : 100000, # Maximum portfolio size
         "strike_roll_distance" : (0.20 * distance_of_wings) # How close to the short do we allow the price to move before rolling.
@@ -88,14 +87,14 @@ class OptionsIronCondorMWT(Strategy):
     #
     margin_reserve = 0
 
-    strategy_name = f'ic_{parameters["delta_required"]}delta-{parameters["option_duration"]}duration-{parameters["days_before_expiry_to_buy_back"]}exit'
+    strategy_name = f'ic_{parameters["delta_required"]}delta-{parameters["option_duration"]}duration-{parameters["days_before_expiry_to_buy_back"]}exit-{parameters["minimum_hold_period"]}hold'
 
     def initialize(self):
         # The time to sleep between each trading iteration
         self.sleeptime = "1D"  # 1 minute = 1M, 1 hour = 1H,  1 day = 1D
 
         # Initialize the wait counter
-        self.cycles_waited = 0
+        self.hold_length = 0
 
         self.non_existing_expiry_dates = []
 
@@ -105,14 +104,13 @@ class OptionsIronCondorMWT(Strategy):
         option_duration = self.parameters["option_duration"]
         strike_step_size = self.parameters["strike_step_size"]
         delta_required = self.parameters["delta_required"]
-        delta_threshold = self.parameters["delta_threshold"]
         days_before_expiry_to_buy_back = self.parameters[
             "days_before_expiry_to_buy_back"
         ]
         distance_of_wings = self.parameters["distance_of_wings"]
         quantity_to_trade = self.parameters["quantity_to_trade"]
-        wait_cycles_after_threshold_cross = self.parameters[
-            "wait_cycles_after_threshold_cross"
+        minimum_hold_period  = self.parameters[
+            "minimum_hold_period"
         ]
         strike_roll_distance = self.parameters["strike_roll_distance"]
 
@@ -123,8 +121,9 @@ class OptionsIronCondorMWT(Strategy):
         # Add lines to the chart
         self.add_line(f"{symbol}_price", underlying_price)
 
-        # Add 1 to the wait counter
-        self.cycles_waited += 1
+        # IMS -- This only works for this approach with a single condor active
+        # at anytime
+        self.hold_length += 1
 
         # Get the current datetime
         dt = self.get_datetime()
@@ -151,7 +150,7 @@ class OptionsIronCondorMWT(Strategy):
                 self.add_marker(
                     f"Created 1st Condor: margin reserve {self.margin_reserve}",
                     value=underlying_price,
-                    color="purple",
+                    color="green",
                     symbol="triangle-up",    
                     detail_text=f"Date: {dt}\nExpiration: {expiry}\nLast price: {underlying_price}\ncall short: {call_strike}\nput short: {put_strike}"
                 )
@@ -231,12 +230,15 @@ class OptionsIronCondorMWT(Strategy):
             # Sell all of our positions
             self.sell_all()
 
+            # Reset the minimum time to hold a condor
+            self.hold_length = 0
+
             self.margin_reserve = self.margin_reserve - (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
 
             self.add_marker(
                 f"Close Condor for Days to Expiry: margin reserve {self.margin_reserve}",
                 value=underlying_price,
-                color="orange",
+                color="red",
                 symbol="triangle-down",
                 detail_text=f"day_to_expiry: {days_to_expiry}\nunderlying_price: {underlying_price}\nposition_strike: {position_strike}"
             )
@@ -263,7 +265,7 @@ class OptionsIronCondorMWT(Strategy):
                 self.add_marker(
                     f"New Condor: margin reserve {self.margin_reserve}",
                     value=underlying_price,
-                    color="purple",
+                    color="green",
                     symbol="triangle-up",    
                     detail_text=f"Date: {dt}\nExpiration: {new_expiry}\nLast price: {underlying_price}\ncall short: {call_strike}\nput short: {put_strike}"
                 )
@@ -277,9 +279,8 @@ class OptionsIronCondorMWT(Strategy):
                     detail_text=f"Date: {dt}\nExpiration: {new_expiry}\nLast price: {underlying_price}\ncall short: {call_strike}\nput short: {put_strike}"
                 ) 
 
-        # If we need to roll the option
-        elif roll_call_short or roll_put_short:
-            # Create roll message
+        # Roll the option if it is over the minimum hold period and the underlying price is close to the short strike
+        elif (roll_call_short or roll_put_short) and (self.hold_length <= minimum_hold_period):
             roll_message = ""
             if roll_call_short:
                 roll_message = "Roll for approaching short strike: "
@@ -291,6 +292,9 @@ class OptionsIronCondorMWT(Strategy):
             # IMS sell all will close ALL postions, we need to upgrade to only close the current position
             #   to handle multiple open condors at one time
             self.sell_all()
+
+            # Reset the hold period counter
+            self.hold_length = 0
 
             self.margin_reserve = self.margin_reserve - (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
 
