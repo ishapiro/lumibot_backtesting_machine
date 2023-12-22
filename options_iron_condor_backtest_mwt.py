@@ -74,7 +74,7 @@ class OptionsIronCondorMWT(Strategy):
         "delta_required": 0.15,  # The delta of the option we want to sell
         "days_before_expiry_to_buy_back": 7,  # How many days before expiry to buy back the call
         "quantity_to_trade": 10,  # The number of contracts to trade
-        "minimum_hold_period": 5,  # The number minium number days to wait before exiting a strategy -- this strategy only trades once a day
+        "minimum_hold_period": 5,  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
         "budget" : 100000, # Maximum portfolio size
         "strike_roll_distance" : (0.20 * distance_of_wings) # How close to the short do we allow the price to move before rolling.
@@ -172,6 +172,8 @@ class OptionsIronCondorMWT(Strategy):
         roll_put_short = False
         should_sell_for_expiry = False
         option_expiry = None
+        call_strike = None
+        put_strike = None
 
         # Loop through all the positions
         for position in positions:
@@ -210,6 +212,7 @@ class OptionsIronCondorMWT(Strategy):
                         # Check if the delta is above the delta required
                         # IMS switch to check short cross over  -- if greeks["delta"] > delta_threshold:
                         call_short_strike_boundary = position.asset.strike - strike_roll_distance
+                        call_strike = position.asset.strike
                         if underlying_price >= call_short_strike_boundary:
                             # If it is, we need to roll the option
                             roll_call_short = True
@@ -220,6 +223,7 @@ class OptionsIronCondorMWT(Strategy):
                         # Check if the delta is below the delta required
                         # IMS switch to crossing strike -- if greeks["delta"] < -delta_threshold:
                         put_short_strike_boundary = position.asset.strike + strike_roll_distance
+                        put_strike = position.asset.strike
                         if underlying_price <= put_short_strike_boundary:
                             # If it is, we need to roll the option
                             roll_put_short = True
@@ -272,7 +276,7 @@ class OptionsIronCondorMWT(Strategy):
             else:
                 # Add marker to the chart
                 self.add_marker(
-                    f"Roll Failed: {condor_status}",
+                    f"New condor creation failed: {condor_status}",
                     value=underlying_price,
                     color="blue",
                     symbol="asterisk",
@@ -280,7 +284,18 @@ class OptionsIronCondorMWT(Strategy):
                 ) 
 
         # Roll the option if it is over the minimum hold period and the underlying price is close to the short strike
-        elif (roll_call_short or roll_put_short) and (self.hold_length <= minimum_hold_period):
+        elif (roll_call_short or roll_put_short):
+            if int(self.hold_length) < int(minimum_hold_period):
+                self.add_marker(
+                    f"Short exceeded, current hold: {self.hold_length}<{minimum_hold_period}",
+                    value=underlying_price,
+                    color="yellow",
+                    symbol="circle-dot",
+                    detail_text=f"Date: {dt}\nLast price: {underlying_price}\ncall short: {call_strike}\nput short: {put_strike}"
+                )
+                return
+            
+
             roll_message = ""
             if roll_call_short:
                 roll_message = "Roll for approaching short strike: "
@@ -299,8 +314,8 @@ class OptionsIronCondorMWT(Strategy):
             self.margin_reserve = self.margin_reserve - (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
 
             # Sleep for 5 seconds to make sure the order goes through
-            # IMS do we need this in a backtest?
-            self.sleep(1)
+            # IMS This is a noop in backtest mode
+            self.sleep(5)
 
             # Add marker to the chart
             self.add_marker(
@@ -641,11 +656,10 @@ class OptionsIronCondorMWT(Strategy):
 
 if __name__ == "__main__":
         # Backtest this strategy
-        backtesting_start = datetime(2022, 1, 3)
-        backtesting_end = datetime(2023, 12, 20)
+        backtesting_start = datetime(2022, 6, 1)
+        backtesting_end = datetime(2022, 9, 30)
 
-        trading_fee = TradingFee(percent_fee=0.003)  # IMS closer to .60 per leg
-
+        trading_fee = TradingFee(percent_fee=0.005)  # IMS account for trading fees and slipage
         # polygon_has_paid_subscription is set to true to api calls are not thottled
         OptionsIronCondorMWT.backtest(
             PolygonDataBacktesting,
