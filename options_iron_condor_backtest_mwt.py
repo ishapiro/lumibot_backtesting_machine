@@ -71,7 +71,7 @@ class OptionsIronCondorMWT(Strategy):
         "symbol": "SPY",
         "option_duration": 40,  # How many days until the call option expires when we sell it
         "strike_step_size": 1,  # IMS Is this the strike spacing of the specific asset, can we get this from Poloygon?
-        "delta_required": 0.15,  # The delta of the option we want to sell
+        "delta_required": 0.20,  # The delta of the option we want to sell
         "days_before_expiry_to_buy_back": 7,  # How many days before expiry to buy back the call
         "quantity_to_trade": 10,  # The number of contracts to trade
         "minimum_hold_period": 5,  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
@@ -656,8 +656,8 @@ class OptionsIronCondorMWT(Strategy):
 
 if __name__ == "__main__":
         # Backtest this strategy
-        backtesting_start = datetime(2022, 6, 1)
-        backtesting_end = datetime(2022, 9, 30)
+        backtesting_start = datetime(2021, 1, 2)
+        backtesting_end = datetime(2023, 10, 1)
 
         trading_fee = TradingFee(percent_fee=0.005)  # IMS account for trading fees and slipage
         # polygon_has_paid_subscription is set to true to api calls are not thottled
