@@ -616,8 +616,10 @@ class OptionsIronCondorMWT(Strategy):
         return strike_deltas
     
     def search_next_market_date( self, expiry, symbol, rounded_underlying_price):
+        return expiry
         # Check if there is an option with this expiry (in case it's a holiday or weekend)
         while True:
+            original_expiry = expiry
             # Check if we already know that this expiry doesn't exist
             if expiry in self.non_existing_expiry_dates:
                 # Increase the expiry by one day
@@ -645,6 +647,11 @@ class OptionsIronCondorMWT(Strategy):
 
             # If we didn't get the price, then move the expiry forward by one day and try again
             expiry += timedelta(days=1)
+            if expiry > original_expiry + timedelta(days=5):
+                # If we have increased the expiry by 5 days and still haven't found an expiry date
+                # then return the original date.  This may cause a non-fatal error but this is better
+                # than an infinite loop.
+                return original_expiry 
 
         return expiry
         
@@ -657,7 +664,7 @@ class OptionsIronCondorMWT(Strategy):
 if __name__ == "__main__":
         # Backtest this strategy
         backtesting_start = datetime(2021, 1, 2)
-        backtesting_end = datetime(2023, 10, 1)
+        backtesting_end = datetime(2023, 6, 29)
 
         trading_fee = TradingFee(percent_fee=0.005)  # IMS account for trading fees and slipage
         # polygon_has_paid_subscription is set to true to api calls are not thottled
