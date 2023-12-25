@@ -27,7 +27,8 @@ Strategy Description
 Author: Irv Shapiro (ishapiro@cogitations.com)
 YouTube: MakeWithTech
 
-Based on: Lumibot Condor Example
+Based on: Lumibot Condor Example, modified to incorportate concepts discuss in the SMB Capital
+Options Trading Course.
 
 NOTE: The current version assumes only one condor is open at a time!!!
 NOTE: Maximum margin is not enforced!!!
@@ -35,9 +36,7 @@ NOTE: Maximum margin is not enforced!!!
 This parameterized Iron Condor Test is desgined to facilitate testing condors across a range of names,
 deltas and expiration dates.
 
-Future version:  In the future this will be undated so it can be invoked from a Flask web
-framework with the input parameters available via an html form and the out files available
-via a browser.
+An iron condor is a market neutral strategy that profits when the underlying asset stays within a range.
 
 Key user defined parameters:
 
@@ -71,13 +70,13 @@ class OptionsIronCondorMWT(Strategy):
         "symbol": "SPY",
         "option_duration": 40,  # How many days until the call option expires when we sell it
         "strike_step_size": 1,  # IMS Is this the strike spacing of the specific asset, can we get this from Poloygon?
-        "delta_required": 0.20,  # The delta of the option we want to sell
+        "delta_required": 0.15,  # The delta of the option we want to sell
         "days_before_expiry_to_buy_back": 7,  # How many days before expiry to buy back the call
         "quantity_to_trade": 10,  # The number of contracts to trade
-        "minimum_hold_period": 5,  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
+        "minimum_hold_period": 7,  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
         "budget" : 100000, # Maximum portfolio size
-        "strike_roll_distance" : (0.20 * distance_of_wings) # How close to the short do we allow the price to move before rolling.
+        "strike_roll_distance" : (0.10 * distance_of_wings) # How close to the short do we allow the price to move before rolling.
     }
 
     # The Lumibot framework does not current track margin requirements.  For this strategy
@@ -121,25 +120,26 @@ class OptionsIronCondorMWT(Strategy):
         # Add lines to the chart
         self.add_line(f"{symbol}_price", underlying_price)
 
-        # IMS -- This only works for this approach with a single condor active
-        # at anytime
+        # IMS this only works because the strategy only holds one condor at a time
         self.hold_length += 1
 
         # Get the current datetime
         dt = self.get_datetime()
 
         # On first trading iteration, create the initial condor
-        # IMS We do not really need this is we set a capital available and always add a condor
-        # if we are below the capital threshold
+        # IMS Once again this only works because we only hold one condor
+        # a more sophisticated strategy using multiple condors will have to 
+        # carfully track the margin reserve
         if self.first_iteration:
             # Get next 3rd Friday expiry after the date
             expiry = self.get_next_expiration_date(option_duration, symbol, rounded_underlying_price)
 
-            break_date = dtime.date(2022, 3, 18)
-            if expiry == break_date:
-                print("break")
+            # IMS used for debugging.  Create a criteria and then put a break on the print statement
+            # break_date = dtime.date(2022, 3, 18)
+            # if expiry == break_date:
+            #     print("break")
 
-            # Create the condor
+            # Create the intial condor
             condor_status, call_strike, put_strike = self.create_condor(
                 symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings
             )
@@ -254,9 +254,9 @@ class OptionsIronCondorMWT(Strategy):
             # Get closest 3rd Friday expiry
             new_expiry = self.get_next_expiration_date(option_duration, symbol, rounded_underlying_price)
 
-            break_date = dtime.date(2022, 3, 18)
-            if new_expiry == break_date:
-                print("break")
+            # break_date = dtime.date(2022, 3, 18)
+            # if new_expiry.year == 2024:
+            #     print("break")
 
             # Create a new condor
             condor_status, call_strike, put_strike = self.create_condor(
@@ -331,9 +331,9 @@ class OptionsIronCondorMWT(Strategy):
             # Get closest 3rd Friday expiry
             roll_expiry = self.get_next_expiration_date(option_duration, symbol, rounded_underlying_price)
 
-            break_date = dtime.date(2022, 3, 18)
-            if roll_expiry == break_date:
-                print("break")
+            # break_date = dtime.date(2022, 3, 18)
+            # if roll_expiry.year == 2024:
+            #     print("break")
 
             # Create a new condor
             condor_status, call_strike, put_strike = self.create_condor(
@@ -616,7 +616,7 @@ class OptionsIronCondorMWT(Strategy):
         return strike_deltas
     
     def search_next_market_date( self, expiry, symbol, rounded_underlying_price):
-        return expiry
+
         # Check if there is an option with this expiry (in case it's a holiday or weekend)
         while True:
             original_expiry = expiry
@@ -624,7 +624,10 @@ class OptionsIronCondorMWT(Strategy):
             if expiry in self.non_existing_expiry_dates:
                 # Increase the expiry by one day
                 expiry += timedelta(days=1)
-                continue
+                if expiry > (original_expiry + timedelta(days=5)):
+                    return original_expiry
+                else:
+                    continue
 
             # Create the asset
             asset = Asset(
@@ -647,7 +650,7 @@ class OptionsIronCondorMWT(Strategy):
 
             # If we didn't get the price, then move the expiry forward by one day and try again
             expiry += timedelta(days=1)
-            if expiry > original_expiry + timedelta(days=5):
+            if expiry > (original_expiry + timedelta(days=5)):
                 # If we have increased the expiry by 5 days and still haven't found an expiry date
                 # then return the original date.  This may cause a non-fatal error but this is better
                 # than an infinite loop.
@@ -663,8 +666,8 @@ class OptionsIronCondorMWT(Strategy):
 
 if __name__ == "__main__":
         # Backtest this strategy
-        backtesting_start = datetime(2021, 1, 2)
-        backtesting_end = datetime(2023, 6, 29)
+        backtesting_start = datetime(2023, 1, 1)
+        backtesting_end = datetime(2023, 12, 20)
 
         trading_fee = TradingFee(percent_fee=0.005)  # IMS account for trading fees and slipage
         # polygon_has_paid_subscription is set to true to api calls are not thottled
