@@ -1,25 +1,26 @@
 Lumibot Iron Condor Benchmarking Experiment
 
-# This project is not ready for use.  It is a work in process and does not work correctly.
-
-This is my first experiment using the Lumibot framework to build a robust Iron Condor Backtesting environment.  Once completed
-I will ensure the reliability of the code by comparing results to alternative commercially available backtesting environments.
+# Iron Condor Backtesting Strategy
 
 Disclaimer: The options strategies presented within this content are intended for educational purposes only. They are not meant to be used for trading live stocks or any other financial instruments. The information provided is based on historical data and hypothetical scenarios, and it does not guarantee future results or profits.
 
 Trading stocks and options involve substantial risks and may result in the loss of your invested capital. It is essential to conduct thorough research, seek advice from a qualified financial professional, and carefully consider your risk tolerance before engaging in any trading activities.
 
-The strategies discussed in this content should not be regarded as recommendations or endorsements. The market conditions, regulations, and individual circumstances can significantly impact the outcome of any trading strategy. Therefore, it is crucial to understand that every investment decision carries its own risks, and you should exercise caution and diligence when applying any information provided herein.
-
 By accessing and utilizing the information presented, you acknowledge that you are solely responsible for any trading decisions you make. Neither the author nor any associated parties shall be held liable for any losses, damages, or consequences arising from the use of the strategies discussed in this content.
 
-Always remember that trading in the financial markets involves inherent risks, and it is recommended to seek professional advice and conduct thorough analysis before making any investment decisions.
+License: MIT License:
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## Files
 
 options_iron_condor_backtest_mwt.py -- this is the strategy
 option_testing.py -- this is a mini strategy used to test retreiving option pricing
 polygon_test_api.py -- this is a simple test of the polygon API
+
+## See the code for additional information
+
+The code is extensively commented.  I recommend reviewing the code before attempting to run it.
 
 ## Background
 
