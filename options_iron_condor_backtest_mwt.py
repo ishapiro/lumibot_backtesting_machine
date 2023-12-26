@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 import datetime as dtime
+from decimal import Decimal
 
 from lumibot.entities import Asset, TradingFee
 from lumibot.strategies.strategy import Strategy
@@ -59,6 +60,10 @@ Explaination of Iron Condor Parameters:
     put short_strike_boundary
     put short position
     put long posittion
+
+When the price of the underlying asset gets within a certain distance of the short strike, the strategy
+will roll the short strike to a new strike.  The distance of the short strike is defined by the
+parameter strike_roll_distance.  The roll will be in the direction of the underlying price movement.
     
 """
 
@@ -141,10 +146,10 @@ class OptionsIronCondorMWT(Strategy):
 
             # Create the intial condor
             condor_status, call_strike, put_strike = self.create_condor(
-                symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings
+                symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, "both"
             )
 
-            if condor_status == "success":
+            if "Success" in condor_status:
                 self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
                 # Add marker to the chart
                 self.add_marker(
@@ -260,10 +265,10 @@ class OptionsIronCondorMWT(Strategy):
 
             # Create a new condor
             condor_status, call_strike, put_strike = self.create_condor(
-                symbol, new_expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings
+                symbol, new_expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, "both"
             )
 
-            if condor_status == "success":
+            if "Success" in condor_status:
                 self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
                 # Add marker to the chart
                 self.add_marker(
@@ -287,7 +292,7 @@ class OptionsIronCondorMWT(Strategy):
         elif (roll_call_short or roll_put_short):
             if int(self.hold_length) < int(minimum_hold_period):
                 self.add_marker(
-                    f"Short exceeded, current hold: {self.hold_length}<{minimum_hold_period}",
+                    f"Short exceeded hold was not exceeded: {self.hold_length}<{minimum_hold_period}",
                     value=underlying_price,
                     color="yellow",
                     symbol="circle-dot",
@@ -299,14 +304,12 @@ class OptionsIronCondorMWT(Strategy):
             roll_message = ""
             if roll_call_short:
                 roll_message = "Roll for approaching short strike: "
+                side = "call"
+                self.close_call_side()
             if roll_put_short:
                 roll_message = "Roll for approaching put strike: "
-
-            # Sell all of our positions
-            # IMS this need to be changed to only roll one of the spreads and not create a new condor
-            # IMS sell all will close ALL postions, we need to upgrade to only close the current position
-            #   to handle multiple open condors at one time
-            self.sell_all()
+                side = "put"
+                self.close_put_side()
 
             # Reset the hold period counter
             self.hold_length = 0
@@ -337,14 +340,14 @@ class OptionsIronCondorMWT(Strategy):
 
             # Create a new condor
             condor_status, call_strike, put_strike = self.create_condor(
-                symbol, roll_expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings
+                symbol, roll_expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, side
             )
 
-            if condor_status == "success":
+            if "Success" in condor_status:
                 self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
                 # Add marker to the chart
                 self.add_marker(
-                    f"Rolled Condor: margin reserve {self.margin_reserve}",
+                    f"Rolled Condor: {condor_status}, margin reserve {self.margin_reserve}",
                     value=underlying_price,
                     color="purple",
                     symbol="triangle-up",    
@@ -361,15 +364,15 @@ class OptionsIronCondorMWT(Strategy):
                 )   
 
     def create_condor(
-        self, symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings
+        self, symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, side
     ):
 
         status = "no condor created"
-        break_date = dtime.date(2022, 3, 18)
-        if expiry == break_date:
-            print("break")
+        # break_date = dtime.date(2022, 3, 18)
+        # if expiry == break_date:
+        #     print("break")
 
-        print(f"Creating condor for {symbol} with expiry {expiry}")
+        print(f"Creating condor for {symbol}, side is {side}, with expiry {expiry}")
         
         # Get the current price of the underlying asset
         underlying_price = self.get_last_price(symbol)
@@ -379,7 +382,9 @@ class OptionsIronCondorMWT(Strategy):
             round(underlying_price / strike_step_size) * strike_step_size
         )
 
-        # Make a list of all the strikes around the underlying price
+        ################################################
+        # Find the strikes for both the shorts and longs
+        ################################################
         strikes = [
             rounded_underlying_price + strike_step_size * i for i in range(0, 100)
         ] + [rounded_underlying_price - strike_step_size * i for i in range(1, 100)]
@@ -400,6 +405,11 @@ class OptionsIronCondorMWT(Strategy):
                 call_strike = strike
                 break
 
+        # If we didn't find a call strike set an error message
+        if call_strike is None and (side == "call" or side =="both"):
+            status = "no call strike found"
+            return status, call_strike, put_strike
+
         # Only keep the strikes below the underlying price for puts
         put_strikes = [strike for strike in strikes if strike < underlying_price]
         # Sort the strikes in descending order
@@ -415,18 +425,17 @@ class OptionsIronCondorMWT(Strategy):
                 put_strike = strike
                 break
 
-        # If we didn't find a call strike or a put strike, return
-        if call_strike is None or put_strike is None:
-            if call_strike is None:
-                status = "no call strike found"
-            if put_strike is None:
-                status = "no put strike found"
-            
+        # If we didn't find a  put strike set an error message
+        if put_strike is None and (side == "put" or side =="both"):
+            status = "no put strike found"
             return status, call_strike, put_strike
 
+        ###################################################################################
+        # Attempt to find the orders (combination of strike, delta, and expiration) we need
+        ###################################################################################
         # Make 3 attempts to create the call side of the condor
         call_strike_adjustment = 0
-        for i in range(8):
+        for i in range(3):
             call_sell_order, call_buy_order = self.get_call_orders(
                 symbol,
                 expiry,
@@ -446,7 +455,7 @@ class OptionsIronCondorMWT(Strategy):
 
         # Make 3 attempts to create the put side of the condor
         put_strike_adjustment = -call_strike_adjustment
-        for i in range(8):
+        for i in range(3):
             put_sell_order, put_buy_order = self.get_put_orders(
                 symbol,
                 expiry,
@@ -465,24 +474,51 @@ class OptionsIronCondorMWT(Strategy):
                 # put_strike_adjustment += strike_step_size
                 put_strike_adjustment += 1
 
-        # Check if all the orders are valid
+        ############################################
+        # Submit all of the orders
+        ############################################
         if (
-            call_sell_order is None
-            or call_buy_order is None
-            or put_sell_order is None
-            or put_buy_order is None
+            call_sell_order is not None
+            and call_buy_order is not None
         ):
-            status = "no condor placed"
-            return status, call_strike, put_strike
+            # Submit the orders
+            self.submit_order(call_sell_order)
+            self.submit_order(call_buy_order)
 
-        # Submit the orders
-        self.submit_order(call_sell_order)
-        self.submit_order(call_buy_order)
-        self.submit_order(put_sell_order)
-        self.submit_order(put_buy_order)
+        if (
+            put_sell_order is not None
+            and put_buy_order is not None
+        ):
+            # Submit the orders
+            self.submit_order(put_sell_order)
+            self.submit_order(put_buy_order)
 
-        status = "success"
-        return status, call_strike, put_strike
+        ############################################
+        # Return an appropriate status
+        ############################################
+        
+        if side == "both" and \
+            (call_sell_order is None or \
+             call_buy_order is None or \
+             put_sell_order is None or \
+             put_buy_order is None):
+            return "failed to place condor", call_strike, put_strike
+        elif side == "call" and (call_sell_order is None or call_buy_order is None):
+            return "failed to roll call side", call_strike, put_strike
+        elif side == "put" and (put_sell_order is None or put_buy_order is None):
+            return "failed to roll put side", call_strike, put_strike
+        else:
+            status_messages = {
+                "call": "Success: rolled the call side",
+                "put": "Success: rolled the put side",
+                "both": "Success the Condor" }
+
+        return status_messages[side], call_strike, put_strike
+
+
+    ############################################
+    # Utility functions
+    ############################################
 
     def get_put_orders(
         self, symbol, expiry, strike_step_size, put_strike, quantity_to_trade, distance_of_wings
@@ -615,6 +651,64 @@ class OptionsIronCondorMWT(Strategy):
 
         return strike_deltas
     
+    # IMS The code to close a side does not do any retries.  This will be a problem in live trading.
+    # This code assumes we only have one condor open at a time.  It loops through and closes
+    # all the options.  This is not a good assumption for a more sophisticated strategy.
+
+    def close_call_side(self):
+        # Get all the open positions
+        positions = self.get_positions()
+
+        # Loop through and close all of the calls
+        for position in positions:
+            # If the position is an option
+            if position.asset.asset_type == "option":
+                if position.asset.right == "CALL":
+                    # call_sell_order = self.get_selling_order(position)
+                    asset = Asset(
+                        position.asset.symbol,
+                        asset_type="option",
+                        expiration=position.asset.expiration,
+                        strike=position.asset.strike,
+                        right=position.asset.right,
+                    )
+                     # If this is a short we buy to close if it is long we sell to close                   
+                    if position.quantity < 0:
+                        action = "buy"
+                    else:
+                        action = "sell"
+
+                    call_close_order = self.create_order(asset, abs(position.quantity), action)
+
+                    close_status = self.submit_order(call_close_order)
+        return
+    
+    def close_put_side(self):
+        positions = self.get_positions()
+
+        # Loop through and close all of the puts
+        for position in positions:
+            # If the position is an option
+            if position.asset.asset_type == "option":
+                if position.asset.right == "PUT":
+                    asset = Asset(
+                        position.asset.symbol,
+                        asset_type="option",
+                        expiration=position.asset.expiration,
+                        strike=position.asset.strike,
+                        right=position.asset.right,
+                    )
+                    # If this is a short we buy to close if it is long we sell to close
+                    if position.quantity < 0:
+                        action = "buy"
+                    else:
+                        action = "sell"
+
+                    call_close_order = self.create_order(asset, abs(position.quantity), action)
+
+                    close_status = self.submit_order(call_close_order)
+        return
+    
     def search_next_market_date( self, expiry, symbol, rounded_underlying_price):
 
         # Check if there is an option with this expiry (in case it's a holiday or weekend)
@@ -667,7 +761,7 @@ class OptionsIronCondorMWT(Strategy):
 if __name__ == "__main__":
         # Backtest this strategy
         backtesting_start = datetime(2023, 1, 1)
-        backtesting_end = datetime(2023, 12, 20)
+        backtesting_end = datetime(2023, 3, 31)
 
         trading_fee = TradingFee(percent_fee=0.005)  # IMS account for trading fees and slipage
         # polygon_has_paid_subscription is set to true to api calls are not thottled
