@@ -401,7 +401,7 @@ class OptionsIronCondorMWT(Strategy):
         # Find the call option with an appropriate delta and the expiry
         call_strike = None
         for strike, delta in call_strike_deltas.items():
-            if delta and delta <= delta_required:
+            if delta is not None and delta <= delta_required:
                 call_strike = strike
                 break
 
@@ -421,7 +421,7 @@ class OptionsIronCondorMWT(Strategy):
         # Find the put option with a the correct delta and the expiry
         put_strike = None
         for strike, delta in put_strike_deltas.items():
-            if delta and delta >= -delta_required:
+            if delta is not None and delta >= -delta_required:
                 put_strike = strike
                 break
 
@@ -433,9 +433,11 @@ class OptionsIronCondorMWT(Strategy):
         ###################################################################################
         # Attempt to find the orders (combination of strike, delta, and expiration) we need
         ###################################################################################
-        # Make 3 attempts to create the call side of the condor
+        # Make 5 attempts to create the call side of the condor
+        # We use 5 attempts because out of the money strikes for some assets move from 1 apart to
+        # 5 apart.  This is a problem for the get_strike_deltas function which uses a step size of 1.
         call_strike_adjustment = 0
-        for i in range(3):
+        for i in range(5):
             call_sell_order, call_buy_order = self.get_call_orders(
                 symbol,
                 expiry,
@@ -587,6 +589,7 @@ class OptionsIronCondorMWT(Strategy):
 
         # Get the price of the call option
         call_buy_price = self.get_last_price(call_buy_asset)
+        print (f"\ncall buy price is {call_buy_price}, strike {call_strike + distance_of_wings}, expiration {expiry} \n")
 
         # Create the order
         call_buy_order = self.create_order(call_buy_asset, quantity_to_trade, "buy")
@@ -642,12 +645,10 @@ class OptionsIronCondorMWT(Strategy):
                     ):
                         break
                 else: 
-                    # IMS This will force the delta out of range for the trade
-                    # Do not set to 0 as this will create divide by zero errors in lumibot
-                    strike_deltas[strike] = 0.001
+                    # IMS The calling code will check for None and skip these strikes
+                    strike_deltas[strike] = None
             else:   
-                # IMS This will force the delta out of range for the trade  
-                strike_deltas[strike] = 0.001
+                strike_deltas[strike] = None
 
         return strike_deltas
     
