@@ -14,19 +14,15 @@ Disclaimer: The options strategies presented within this content are intended fo
 
 Trading stocks and options involve substantial risks and may result in the loss of your invested capital. It is essential to conduct thorough research, seek advice from a qualified financial professional, and carefully consider your risk tolerance before engaging in any trading activities.
 
-The strategies discussed in this content should not be regarded as recommendations or endorsements. The market conditions, regulations, and individual circumstances can significantly impact the outcome of any trading strategy. Therefore, it is crucial to understand that every investment decision carries its own risks, and you should exercise caution and diligence when applying any information provided herein.
-
 By accessing and utilizing the information presented, you acknowledge that you are solely responsible for any trading decisions you make. Neither the author nor any associated parties shall be held liable for any losses, damages, or consequences arising from the use of the strategies discussed in this content.
-
-Always remember that trading in the financial markets involves inherent risks, and it is recommended to seek professional advice and conduct thorough analysis before making any investment decisions.
 """
-
 
 """
 Strategy Description
 
 Author: Irv Shapiro (ishapiro@cogitations.com)
 YouTube: MakeWithTech
+Websites: https://www.makewithtech.com, https://cogitations.com
 
 Based on: Lumibot Condor Example, modified to incorportate concepts discuss in the SMB Capital
 Options Trading Course.
@@ -67,6 +63,12 @@ parameter strike_roll_distance.  The roll will be in the direction of the underl
     
 """
 
+"""
+License: MIT License:
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+"""
+
 
 class OptionsIronCondorMWT(Strategy):
 
@@ -76,6 +78,7 @@ class OptionsIronCondorMWT(Strategy):
         "option_duration": 40,  # How many days until the call option expires when we sell it
         "strike_step_size": 1,  # IMS Is this the strike spacing of the specific asset, can we get this from Poloygon?
         "delta_required": 0.15,  # The delta of the option we want to sell
+        "roll_delta_required": 0.15,  # The delta of the option we want to sell when we do a roll
         "days_before_expiry_to_buy_back": 7,  # How many days before expiry to buy back the call
         "quantity_to_trade": 10,  # The number of contracts to trade
         "minimum_hold_period": 7,  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
@@ -108,6 +111,7 @@ class OptionsIronCondorMWT(Strategy):
         option_duration = self.parameters["option_duration"]
         strike_step_size = self.parameters["strike_step_size"]
         delta_required = self.parameters["delta_required"]
+        roll_delta_required = self.parameters["roll_delta_required"]
         days_before_expiry_to_buy_back = self.parameters[
             "days_before_expiry_to_buy_back"
         ]
@@ -179,6 +183,7 @@ class OptionsIronCondorMWT(Strategy):
         option_expiry = None
         call_strike = None
         put_strike = None
+        original_expiration_date = None
 
         # Loop through all the positions
         for position in positions:
@@ -193,6 +198,9 @@ class OptionsIronCondorMWT(Strategy):
 
                 # Get the expiry of the option
                 option_expiry = position.asset.expiration
+
+                # Saved for a potential roll
+                original_expiration_date = option_expiry
 
                 # Check how close to expiry the option is
                 days_to_expiry = (option_expiry - dt.date()).days
@@ -236,7 +244,12 @@ class OptionsIronCondorMWT(Strategy):
 
         # If we need to sell for expiry
         if (should_sell_for_expiry):
-            # Sell all of our positions
+            
+            # The prior condor was closed because we approach the expiration date.  It is generally dangerous
+            # to leave condors active since the gamma of the options excellerate as we approach the 
+            # expiration date. Another way of saying the above is the pricing of options become more volitile
+            # as we approach the expiration date.  
+
             self.sell_all()
 
             # Reset the minimum time to hold a condor
@@ -263,7 +276,8 @@ class OptionsIronCondorMWT(Strategy):
             # if new_expiry.year == 2024:
             #     print("break")
 
-            # Create a new condor
+            # Since we close the prior condor and we can option another one with a new expiration date
+            # and strike based on the original parameters.
             condor_status, call_strike, put_strike = self.create_condor(
                 symbol, new_expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, "both"
             )
@@ -284,11 +298,17 @@ class OptionsIronCondorMWT(Strategy):
                     f"New condor creation failed: {condor_status}",
                     value=underlying_price,
                     color="blue",
-                    symbol="asterisk",
+                    symbol="cross-open-dot",
                     detail_text=f"Date: {dt}\nExpiration: {new_expiry}\nLast price: {underlying_price}\ncall short: {call_strike}\nput short: {put_strike}"
                 ) 
 
-        # Roll the option if it is over the minimum hold period and the underlying price is close to the short strike
+        #################################################################################################
+        # The following section will roll one side of the condor if the underlying price approaches the
+        # short strike on that side.  The new short strike will be selected based on the rolled delta
+        # parameter.  We can make this delta smaller to give us more room.  The tradeoff is that we will
+        # get less credit for the condor.  
+        #################################################################################################
+                
         elif (roll_call_short or roll_put_short):
             if int(self.hold_length) < int(minimum_hold_period):
                 self.add_marker(
@@ -314,7 +334,9 @@ class OptionsIronCondorMWT(Strategy):
             # Reset the hold period counter
             self.hold_length = 0
 
-            self.margin_reserve = self.margin_reserve - (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
+            # IMS margin requirement needs to be update to reflect the change in the credit
+            # The basic margin requirement remains the same.  The margin reserve is reduced by the cost of the roll
+            # self.margin_reserve = self.margin_reserve - (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
 
             # Sleep for 5 seconds to make sure the order goes through
             # IMS This is a noop in backtest mode
@@ -331,16 +353,17 @@ class OptionsIronCondorMWT(Strategy):
                     position_strike: {position_strike}"
             )
 
-            # Get closest 3rd Friday expiry
-            roll_expiry = self.get_next_expiration_date(option_duration, symbol, rounded_underlying_price)
+            # Use the original option expiration date when we only roll one side
+            roll_expiry = original_expiration_date
 
+            # IMS This is an example of how to set a breakpoint for a specific date.
+            # Set the breakpoint on the print statement.
             # break_date = dtime.date(2022, 3, 18)
             # if roll_expiry.year == 2024:
             #     print("break")
 
-            # Create a new condor
             condor_status, call_strike, put_strike = self.create_condor(
-                symbol, roll_expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, side
+                symbol, roll_expiry, strike_step_size, roll_delta_required, quantity_to_trade, distance_of_wings, side
             )
 
             if "Success" in condor_status:
@@ -362,6 +385,11 @@ class OptionsIronCondorMWT(Strategy):
                     symbol="asterisk",
                     detail_text=f"Date: {dt}\nExpiration: {roll_expiry}\nLast price: {underlying_price}\ncall short: {call_strike}\nput short: {put_strike}"
                 )   
+
+    ##############################################################################################
+    # The following function creates an iron condor or a single spread when rolling an iron condor
+    # The side parameters determines if we create a full condor, "both", or roll the "call"
+    ##############################################################################################
 
     def create_condor(
         self, symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, side
@@ -385,6 +413,9 @@ class OptionsIronCondorMWT(Strategy):
         ################################################
         # Find the strikes for both the shorts and longs
         ################################################
+
+        # IMS The following code is not very efficient and should be refactored
+
         strikes = [
             rounded_underlying_price + strike_step_size * i for i in range(0, 100)
         ] + [rounded_underlying_price - strike_step_size * i for i in range(1, 100)]
@@ -431,11 +462,13 @@ class OptionsIronCondorMWT(Strategy):
             return status, call_strike, put_strike
 
         ###################################################################################
-        # Attempt to find the orders (combination of strike, delta, and expiration) we need
+        # Attempt to find the orders (combination of strike, and expiration)
         ###################################################################################
+
         # Make 5 attempts to create the call side of the condor
-        # We use 5 attempts because out of the money strikes for some assets move from 1 apart to
-        # 5 apart.  This is a problem for the get_strike_deltas function which uses a step size of 1.
+        # We use 5 attempts because as we move out of the money, the distance between strikes
+        # may increase from 1 to 5
+
         call_strike_adjustment = 0
         for i in range(5):
             call_sell_order, call_buy_order = self.get_call_orders(
@@ -455,9 +488,9 @@ class OptionsIronCondorMWT(Strategy):
             else:
                 call_strike_adjustment -= strike_step_size
 
-        # Make 3 attempts to create the put side of the condor
+        # Make 5 attempts to create the put side of the condor
         put_strike_adjustment = -call_strike_adjustment
-        for i in range(3):
+        for i in range(5):
             put_sell_order, put_buy_order = self.get_put_orders(
                 symbol,
                 expiry,
@@ -479,6 +512,7 @@ class OptionsIronCondorMWT(Strategy):
         ############################################
         # Submit all of the orders
         ############################################
+                
         if (
             call_sell_order is not None
             and call_buy_order is not None
@@ -498,6 +532,10 @@ class OptionsIronCondorMWT(Strategy):
         ############################################
         # Return an appropriate status
         ############################################
+            
+        # IMS This code should be refactored.  It is generally considered bad practice
+        # to have multiple return statements in a function.  It is also bad practice
+        # to mix return data types.
         
         if side == "both" and \
             (call_sell_order is None or \
@@ -516,7 +554,6 @@ class OptionsIronCondorMWT(Strategy):
                 "both": "Success the Condor" }
 
         return status_messages[side], call_strike, put_strike
-
 
     ############################################
     # Utility functions
@@ -710,6 +747,9 @@ class OptionsIronCondorMWT(Strategy):
                     close_status = self.submit_order(call_close_order)
         return
     
+    # IMS It is not clear that we really need to do this check and there may be a better way
+    # to verify market days.
+    
     def search_next_market_date( self, expiry, symbol, rounded_underlying_price):
 
         # Check if there is an option with this expiry (in case it's a holiday or weekend)
@@ -758,13 +798,17 @@ class OptionsIronCondorMWT(Strategy):
         suggested_date = self.get_option_expiration_after_date(dt + timedelta(days=option_duration))
         return self.search_next_market_date(suggested_date, symbol, strike_price)
             
+################################################################################################
+# If this module is run as a script it will invoke the backtest method in the Lumibot framework.
+################################################################################################
 
 if __name__ == "__main__":
         # Backtest this strategy
         backtesting_start = datetime(2021, 1, 1)
         backtesting_end = datetime(2023, 12, 15)
 
-        trading_fee = TradingFee(percent_fee=0.005)  # IMS account for trading fees and slipage
+        trading_fee = TradingFee(percent_fee=0.007)  # IMS account for trading fees and slipage
+
         # polygon_has_paid_subscription is set to true to api calls are not thottled
         OptionsIronCondorMWT.backtest(
             PolygonDataBacktesting,
