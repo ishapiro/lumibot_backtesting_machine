@@ -73,6 +73,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 class OptionsIronCondorMWT(Strategy):
 
     distance_of_wings = 15 # reference in multiple parameters below, in dollars not strikes
+    quantity_to_trade = 10 # reference in multiple parameters below, number of contracts
     parameters = {
         "symbol": "SPY",
         "option_duration": 40,  # How many days until the call option expires when we sell it
@@ -80,10 +81,10 @@ class OptionsIronCondorMWT(Strategy):
         "delta_required": 0.15,  # The delta of the option we want to sell
         "roll_delta_required": 0.15,  # The delta of the option we want to sell when we do a roll
         "days_before_expiry_to_buy_back": 7,  # How many days before expiry to buy back the call
-        "quantity_to_trade": 10,  # The number of contracts to trade
+        "quantity_to_trade": quantity_to_trade,  # The number of contracts to trade
         "minimum_hold_period": 7,  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
-        "budget" : 100000, # Maximum portfolio size
+        "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.20), # Need to add logic to limit trade size based on margin requirements.  Added 20% for safety since I am likely to only allocate 80% of the account.
         "strike_roll_distance" : (0.10 * distance_of_wings) # How close to the short do we allow the price to move before rolling.
     }
 
@@ -804,7 +805,7 @@ class OptionsIronCondorMWT(Strategy):
 
 if __name__ == "__main__":
         # Backtest this strategy
-        backtesting_start = datetime(2021, 1, 1)
+        backtesting_start = datetime(2020, 1, 2)
         backtesting_end = datetime(2023, 12, 15)
 
         trading_fee = TradingFee(percent_fee=0.007)  # IMS account for trading fees and slipage
