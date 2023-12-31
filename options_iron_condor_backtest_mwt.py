@@ -1,6 +1,11 @@
 from datetime import datetime, timedelta
 import datetime as dtime
 from decimal import Decimal
+import time
+
+# IMS pretty print is used for debugging
+import pprint
+pp = pprint.PrettyPrinter(indent=4)   
 
 from lumibot.entities import Asset, TradingFee
 from lumibot.strategies.strategy import Strategy
@@ -173,6 +178,11 @@ class OptionsIronCondorMWT(Strategy):
                     symbol="asterisk",
                     detail_text=f"Date: {dt}\nExpiration: {expiry}\nLast price: {underlying_price}\ncall short: {call_strike}\nput short: {put_strike}"
                 ) 
+
+            # Debug Code
+            # my_orders = self.get_orders()
+            # print (f"\nmy_orders: {my_orders}\n")
+
             return
 
         # Get all the open positions
@@ -321,17 +331,23 @@ class OptionsIronCondorMWT(Strategy):
                 )
                 return
             
-
             roll_message = ""
+            roll_close_status = ""
             if roll_call_short:
-                roll_message = "Roll for approaching short strike: "
+                roll_message = "Closing call, rolling: "
                 side = "call"
-                self.close_call_side()
+                roll_close_status = self.close_call_side()
             if roll_put_short:
-                roll_message = "Roll for approaching put strike: "
+                roll_message = "Closing put, rolling: "
                 side = "put"
-                self.close_put_side()
+                roll_close_status = self.close_put_side()
 
+            # get updated portfolio for debugging
+            time.sleep(5)
+            roll_orders = self.get_orders()
+            print("\nRoll orders: ")
+            pp.pprint(roll_orders)
+            
             # Reset the hold period counter
             self.hold_length = 0
 
@@ -345,13 +361,14 @@ class OptionsIronCondorMWT(Strategy):
 
             # Add marker to the chart
             self.add_marker(
-                f"Close for Roll, {roll_message} Margin reserve: {self.margin_reserve}",
+                f"{roll_message}, {roll_message} Margin reserve: {self.margin_reserve}",
                 value=underlying_price,
                 color="yellow",
                 symbol="triangle-down",
                 detail_text=f"day_to_expiry: {days_to_expiry}\n\
                     underlying_price: {underlying_price}\n\
-                    position_strike: {position_strike}"
+                    position_strike: {position_strike}\n\
+                    {roll_close_status}"
             )
 
             # Use the original option expiration date when we only roll one side
@@ -385,7 +402,9 @@ class OptionsIronCondorMWT(Strategy):
                     color="blue",
                     symbol="asterisk",
                     detail_text=f"Date: {dt}\nExpiration: {roll_expiry}\nLast price: {underlying_price}\ncall short: {call_strike}\nput short: {put_strike}"
-                )   
+                )  
+ 
+        return
 
     ##############################################################################################
     # The following function creates an iron condor or a single spread when rolling an iron condor
@@ -471,49 +490,52 @@ class OptionsIronCondorMWT(Strategy):
         # may increase from 1 to 5
 
         call_strike_adjustment = 0
-        for i in range(5):
-            call_sell_order, call_buy_order = self.get_call_orders(
-                symbol,
-                expiry,
-                strike_step_size,
-                call_strike + call_strike_adjustment,
-                quantity_to_trade,
-                distance_of_wings,
-            )
+        put_sell_order, put_buy_order, call_sell_order, call_buy_order = None, None, None, None
+        if side == "call" or side == "both":
+            for i in range(5):
+                call_sell_order, call_buy_order = self.get_call_orders(
+                    symbol,
+                    expiry,
+                    strike_step_size,
+                    call_strike + call_strike_adjustment,
+                    quantity_to_trade,
+                    distance_of_wings,
+                )
 
-            # Check if we got both orders
-            if call_sell_order is not None and call_buy_order is not None:
-                break
+                # Check if we got both orders
+                if call_sell_order is not None and call_buy_order is not None:
+                    break
 
-            # If we didn't get both orders, then move the call strike up
-            else:
-                call_strike_adjustment -= strike_step_size
+                # If we didn't get both orders, then move the call strike up
+                else:
+                    call_strike_adjustment -= strike_step_size
 
-        # Make 5 attempts to create the put side of the condor
-        put_strike_adjustment = -call_strike_adjustment
-        for i in range(5):
-            put_sell_order, put_buy_order = self.get_put_orders(
-                symbol,
-                expiry,
-                strike_step_size,
-                put_strike + put_strike_adjustment,
-                quantity_to_trade,
-                distance_of_wings
-            )
+        if side=="put" or side == "both":
+            # Make 5 attempts to create the put side of the condor
+            put_strike_adjustment = -call_strike_adjustment
+            for i in range(5):
+                put_sell_order, put_buy_order = self.get_put_orders(
+                    symbol,
+                    expiry,
+                    strike_step_size,
+                    put_strike + put_strike_adjustment,
+                    quantity_to_trade,
+                    distance_of_wings
+                )
 
-            # Check if we got both orders
-            if put_sell_order is not None and put_buy_order is not None:
-                break
+                # Check if we got both orders
+                if put_sell_order is not None and put_buy_order is not None:
+                    break
 
-            # If we didn't get both orders, then move the put strike down
-            else:
-                # put_strike_adjustment += strike_step_size
-                put_strike_adjustment += 1
+                # If we didn't get both orders, then move the put strike down
+                else:
+                    # put_strike_adjustment += strike_step_size
+                    put_strike_adjustment += 1
 
         ############################################
         # Submit all of the orders
         ############################################
-                
+
         if (
             call_sell_order is not None
             and call_buy_order is not None
@@ -537,6 +559,10 @@ class OptionsIronCondorMWT(Strategy):
         # IMS This code should be refactored.  It is generally considered bad practice
         # to have multiple return statements in a function.  It is also bad practice
         # to mix return data types.
+            
+        # get updated portfolio for debugging
+        time.sleep(5)
+        after_update_positions = self.get_positions()
         
         if side == "both" and \
             (call_sell_order is None or \
@@ -698,6 +724,8 @@ class OptionsIronCondorMWT(Strategy):
         # Get all the open positions
         positions = self.get_positions()
 
+        close_status = "no call side to close"
+
         # Loop through and close all of the calls
         for position in positions:
             # If the position is an option
@@ -719,8 +747,9 @@ class OptionsIronCondorMWT(Strategy):
 
                     call_close_order = self.create_order(asset, abs(position.quantity), action)
 
-                    close_status = self.submit_order(call_close_order)
-        return
+                    self.submit_order(call_close_order)
+                        
+        return 
     
     def close_put_side(self):
         positions = self.get_positions()
@@ -745,7 +774,8 @@ class OptionsIronCondorMWT(Strategy):
 
                     call_close_order = self.create_order(asset, abs(position.quantity), action)
 
-                    close_status = self.submit_order(call_close_order)
+                    self.submit_order(call_close_order)
+
         return
     
     # IMS It is not clear that we really need to do this check and there may be a better way
