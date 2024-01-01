@@ -85,11 +85,12 @@ class OptionsIronCondorMWT(Strategy):
         "strike_step_size": 1,  # IMS Is this the strike spacing of the specific asset, can we get this from Poloygon?
         "delta_required": 0.15,  # The delta of the option we want to sell
         "roll_delta_required": 0.15,  # The delta of the option we want to sell when we do a roll
+        "maximum_rolls": 2,  # The maximum number of rolls we will do
         "days_before_expiry_to_buy_back": 7,  # How many days before expiry to buy back the call
         "quantity_to_trade": quantity_to_trade,  # The number of contracts to trade
         "minimum_hold_period": 7,  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
-        "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.20), # Need to add logic to limit trade size based on margin requirements.  Added 20% for safety since I am likely to only allocate 80% of the account.
+        "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.25), # Need to add logic to limit trade size based on margin requirements.  Added 20% for safety since I am likely to only allocate 80% of the account.
         "strike_roll_distance" : (0.10 * distance_of_wings) # How close to the short do we allow the price to move before rolling.
     }
 
@@ -109,6 +110,9 @@ class OptionsIronCondorMWT(Strategy):
         # Initialize the wait counter
         self.hold_length = 0
 
+        # Roll counter -- used to track the number of rolls
+        self.roll_count = 0
+
         self.non_existing_expiry_dates = []
 
     def on_trading_iteration(self):
@@ -127,6 +131,7 @@ class OptionsIronCondorMWT(Strategy):
             "minimum_hold_period"
         ]
         strike_roll_distance = self.parameters["strike_roll_distance"]
+        maximum_rolls = self.parameters["maximum_rolls"]
 
         # Get the price of the underlying asset
         underlying_price = self.get_last_price(symbol)
@@ -252,6 +257,17 @@ class OptionsIronCondorMWT(Strategy):
                             # If it is, we need to roll the option
                             roll_put_short = True
                             break
+        
+        # If either of the rolls is true increament the counte and check for maximum rolls
+        # If this roll would exceed maximum rolls set the expiry flag instead which 
+        # will cause the condor to be closed.
+                        
+        if roll_call_short or roll_put_short:
+            self.roll_count += 1
+            if self.roll_count > maximum_rolls:
+                should_sell_for_expiry = True
+                roll_call_short = False
+                roll_put_short = False
 
         # If we need to sell for expiry
         if (should_sell_for_expiry):
@@ -262,6 +278,9 @@ class OptionsIronCondorMWT(Strategy):
             # as we approach the expiration date.  
 
             self.sell_all()
+
+            # Reset the roll count since we are creating a new condor with both legs
+            self.roll_count = 0
 
             # Reset the minimum time to hold a condor
             self.hold_length = 0
@@ -341,12 +360,6 @@ class OptionsIronCondorMWT(Strategy):
                 roll_message = "Closing put, rolling: "
                 side = "put"
                 roll_close_status = self.close_put_side()
-
-            # get updated portfolio for debugging
-            time.sleep(5)
-            roll_orders = self.get_orders()
-            print("\nRoll orders: ")
-            pp.pprint(roll_orders)
             
             # Reset the hold period counter
             self.hold_length = 0
@@ -394,6 +407,7 @@ class OptionsIronCondorMWT(Strategy):
                     symbol="triangle-up",    
                     detail_text=f"Date: {dt}\nExpiration: {roll_expiry}\nLast price: {underlying_price}\ncall short: {call_strike}\nput short: {put_strike}"
                 )
+
             else:
                 # Add marker to the chart
                 self.add_marker(
@@ -832,10 +846,12 @@ class OptionsIronCondorMWT(Strategy):
 ################################################################################################
 # If this module is run as a script it will invoke the backtest method in the Lumibot framework.
 ################################################################################################
+    
+# Make sure that the dates selected are supported by you Polycon.io subscription
 
 if __name__ == "__main__":
         # Backtest this strategy
-        backtesting_start = datetime(2020, 1, 2)
+        backtesting_start = datetime(2020, 2, 3)
         backtesting_end = datetime(2023, 12, 15)
 
         trading_fee = TradingFee(percent_fee=0.007)  # IMS account for trading fees and slipage
