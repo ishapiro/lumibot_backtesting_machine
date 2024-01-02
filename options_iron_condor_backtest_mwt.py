@@ -77,6 +77,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 class OptionsIronCondorMWT(Strategy):
 
+    # IMS Replaced with parameters from the driver program. See set_parameters method below
+    
     distance_of_wings = 15 # reference in multiple parameters below, in dollars not strikes
     quantity_to_trade = 10 # reference in multiple parameters below, number of contracts
     parameters = {
@@ -88,7 +90,7 @@ class OptionsIronCondorMWT(Strategy):
         "maximum_rolls": 2,  # The maximum number of rolls we will do
         "days_before_expiry_to_buy_back": 7,  # How many days before expiry to buy back the call
         "quantity_to_trade": quantity_to_trade,  # The number of contracts to trade
-        "minimum_hold_period": 7,  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
+        "minimum_hold_period": 5,  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
         "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.25), # Need to add logic to limit trade size based on margin requirements.  Added 20% for safety since I am likely to only allocate 80% of the account.
         "strike_roll_distance" : (0.10 * distance_of_wings) # How close to the short do we allow the price to move before rolling.
@@ -101,8 +103,15 @@ class OptionsIronCondorMWT(Strategy):
     #
     margin_reserve = 0
 
-    strategy_name = f'ic_{parameters["delta_required"]}delta-{parameters["option_duration"]}duration-{parameters["days_before_expiry_to_buy_back"]}exit-{parameters["minimum_hold_period"]}hold'
+    strategy_name = f'ic-{parameters["symbol"]}-{parameters["delta_required"]}delta-{parameters["option_duration"]}duration-{parameters["days_before_expiry_to_buy_back"]}exit-{parameters["minimum_hold_period"]}hold'
 
+    @classmethod
+    def set_parameters(cls, parameters):
+        for key, value in parameters.items():
+            print(f"{key}: {value}")
+        # Set the parameters
+        cls.parameters = parameters
+    
     def initialize(self):
         # The time to sleep between each trading iteration
         self.sleeptime = "1D"  # 1 minute = 1M, 1 hour = 1H,  1 day = 1D
