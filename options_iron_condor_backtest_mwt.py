@@ -5,7 +5,8 @@ import time
 
 # IMS pretty print is used for debugging
 import pprint
-pp = pprint.PrettyPrinter(indent=4)   
+pp = pprint.PrettyPrinter(indent=4)
+from pprint import pformat   
 
 from lumibot.entities import Asset, TradingFee
 from lumibot.strategies.strategy import Strategy
@@ -96,6 +97,8 @@ class OptionsIronCondorMWT(Strategy):
         "strike_roll_distance" : (0.10 * distance_of_wings) # How close to the short do we allow the price to move before rolling.
     }
 
+    parameters_for_debug = pformat(parameters)
+
     # The Lumibot framework does not current track margin requirements.  For this strategy
     # we will track margin manually using the following approximation in an instance variable.
     #
@@ -108,6 +111,7 @@ class OptionsIronCondorMWT(Strategy):
     @classmethod
     def set_parameters(cls, parameters):
         cls.parameters = parameters
+        cls.parameters_for_debug = pformat(cls.parameters)
     
     def initialize(self):
         # The time to sleep between each trading iteration
@@ -157,6 +161,14 @@ class OptionsIronCondorMWT(Strategy):
         # a more sophisticated strategy using multiple condors will have to 
         # carfully track the margin reserve
         if self.first_iteration:
+            # Output the parameters of the strategy to the indicator file
+            self.add_marker(
+                    f"Parameters used in this model",
+                    value=underlying_price+30,
+                    color="green",
+                    symbol="hexagon-open",  
+                    detail_text=self.parameters_for_debug
+                )
             # Get next 3rd Friday expiry after the date
             expiry = self.get_next_expiration_date(option_duration, symbol, rounded_underlying_price)
 

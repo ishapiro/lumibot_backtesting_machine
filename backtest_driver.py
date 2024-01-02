@@ -14,6 +14,8 @@ The Plan ---
 
 This module reads parameters from a TOML configuration file and the runs a backtest.
 
+If there is only one TOML file it should be named strategy_parameters.toml
+
 At the conclusion of the run it creates a directory for the test run and moves the log
 files from the "log" directory to this new directory.  It also creates a file called
 "backtest_results.csv" in the new directory that contains the summary of the results.
@@ -32,8 +34,9 @@ strategy_parameters = {
     "quantity_to_trade": quantity_to_trade,  # The number of contracts to trade
     "minimum_hold_period": 5,  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
     "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
-    "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.25), # Need to add logic to limit trade size based on margin requirements.  Added 20% for safety since I am likely to only allocate 80% of the account.
-    "strike_roll_distance" : (0.10 * distance_of_wings) # How close to the short do we allow the price to move before rolling.
+    "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.25), # Need to add logic to limit trade size based on margin requirements.
+    "strike_roll_distance" : (0.10 * distance_of_wings), # How close to the short do we allow the price to move before rolling.
+    "trading_fee_percent" : 0.007 # The percent fee charged by the broker for each trade
 }
 
 # Read parameters from a TOML file
@@ -45,29 +48,32 @@ pp.pprint(strategy_parameters)
 print("**************************************************")
 print()
 
+capital_budget =  strategy_parameters["distance_of_wings"] \
+    * 100 * strategy_parameters["quantity_to_trade"] \
+    * strategy_parameters["margin_call_factor"]
+
+backtesting_start = datetime.combine(strategy_parameters["starting_date"], datetime.min.time())
+backtesting_end = datetime.combine(strategy_parameters["ending_date"], datetime.min.time())
+
 # Override the parameters set in the OptionsIronCondorMWT class
 OptionsIronCondorMWT.set_parameters(strategy_parameters)
 
-strategy_name = f'ic-{strategy_parameters["symbol"]}-{strategy_parameters["delta_required"]}delta-{strategy_parameters["option_duration"]}duration-{strategy_parameters["days_before_expiry_to_buy_back"]}exit-{strategy_parameters["minimum_hold_period"]}hold'
+strategy_name = f'ic-{strategy_parameters["symbol"]}-{strategy_parameters["delta_required"]}delta-{strategy_parameters["option_duration"]}dur-{strategy_parameters["days_before_expiry_to_buy_back"]}ex-{strategy_parameters["minimum_hold_period"]}hd'
 
-if __name__ == "__main__":
-        # Backtest this strategy
-        backtesting_start = datetime(2020, 2, 3)
-        backtesting_end = datetime(2023, 12, 15)
+trading_fee = TradingFee(percent_fee=strategy_parameters["trading_fee_percent"])  # Account for trading fees and slipage
 
-        trading_fee = TradingFee(percent_fee=0.007)  # IMS account for trading fees and slipage
+# Execute the strategy with the current parameters
 
-        # polygon_has_paid_subscription is set to true to api calls are not thottled
-        OptionsIronCondorMWT.backtest(
-            PolygonDataBacktesting,
-            backtesting_start,
-            backtesting_end,
-            benchmark_asset=strategy_parameters["symbol"],
-            buy_trading_fees=[trading_fee],
-            sell_trading_fees=[trading_fee],
-            polygon_api_key=POLYGON_CONFIG["API_KEY"],
-            polygon_has_paid_subscription=True,
-            name=strategy_name,
-            budget = strategy_parameters["budget"],
-        )
+OptionsIronCondorMWT.backtest(
+    PolygonDataBacktesting,
+    backtesting_start,
+    backtesting_end,
+    benchmark_asset=strategy_parameters["symbol"],
+    buy_trading_fees=[trading_fee],
+    sell_trading_fees=[trading_fee],
+    polygon_api_key=POLYGON_CONFIG["API_KEY"],
+    polygon_has_paid_subscription=True,
+    name=strategy_name,
+    budget = capital_budget,
+)
  
