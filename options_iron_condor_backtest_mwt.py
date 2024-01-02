@@ -107,9 +107,6 @@ class OptionsIronCondorMWT(Strategy):
 
     @classmethod
     def set_parameters(cls, parameters):
-        for key, value in parameters.items():
-            print(f"{key}: {value}")
-        # Set the parameters
         cls.parameters = parameters
     
     def initialize(self):
