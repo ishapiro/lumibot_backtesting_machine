@@ -4,11 +4,15 @@ from datetime import datetime, timedelta
 from lumibot.backtesting import PolygonDataBacktesting
 from options_iron_condor_backtest_mwt import OptionsIronCondorMWT
 from lumibot.entities import TradingFee
+import os
+import toml
+import pprint
+pp = pprint.PrettyPrinter(indent=4)
 
 '''
 The Plan ---
 
-This module reads parameters from a configuration file and the runs a backtest.
+This module reads parameters from a TOML configuration file and the runs a backtest.
 
 At the conclusion of the run it creates a directory for the test run and moves the log
 files from the "log" directory to this new directory.  It also creates a file called
@@ -33,9 +37,13 @@ strategy_parameters = {
 }
 
 # Read parameters from a TOML file
-import toml
 strategy_parameters = toml.load("strategy_parameters.toml")
-
+print()
+print("**************************************************")
+print("Strategy Parameters read from TOML file")
+pp.pprint(strategy_parameters)
+print("**************************************************")
+print()
 
 # Override the parameters set in the OptionsIronCondorMWT class
 OptionsIronCondorMWT.set_parameters(strategy_parameters)
