@@ -18,6 +18,28 @@ options_iron_condor_backtest_mwt.py -- this is the strategy
 option_testing.py -- this is a mini strategy used to test retreiving option pricing
 polygon_test_api.py -- this is a simple test of the polygon API
 
+## Strategy Configuration Files
+
+Strategies parameters are defined in a file named strategy_parameters.toml with the following format:
+
+```
+symbol = "SPY"
+option_duration = 40  # How many days until the call option expires when we sell it
+strike_step_size = 1  # IMS Is this the strike spacing of the specific asset can we get this from Poloygon?
+delta_required = 0.15  # The delta of the option we want to sell
+roll_delta_required = 0.15  # The delta of the option we want to sell when we do a roll
+maximum_rolls = 2  # The maximum number of rolls we will do
+days_before_expiry_to_buy_back = 7  # How many days before expiry to buy back the call
+quantity_to_trade = 10  # The number of contracts to trade
+minimum_hold_period = 5  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
+distance_of_wings = 20  # Distance of the longs from the shorts in dollars -- the wings
+margin_call_factor = 1.25  # How much above the margin requirement do we set the budget
+strike_roll_distance = 5 # How close to the short do we allow the price to move before rolling.
+starting_date = 2020-02-01
+ending_date = 2020-04-30
+trading_fee_percent = 0.07 # Commmision and slipage
+```
+
 ## See the code for additional information
 
 The code is extensively commented.  I recommend reviewing the code before attempting to run it.
