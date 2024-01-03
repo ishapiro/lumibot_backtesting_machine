@@ -406,11 +406,11 @@ class OptionsIronCondorMWT(Strategy):
             if roll_call_short:
                 roll_message = "Closing call, rolling: "
                 side = "call"
-                roll_close_status = self.close_call_side()
+                roll_close_status = self.close_spread(side)
             if roll_put_short:
                 roll_message = "Closing put, rolling: "
                 side = "put"
-                roll_close_status = self.close_put_side()
+                roll_close_status = self.close_spread(side)
             
             # Reset the hold period counter
             self.hold_length = 0
@@ -800,17 +800,17 @@ class OptionsIronCondorMWT(Strategy):
     # This code assumes we only have one condor open at a time.  It loops through and closes
     # all the options.  This is not a good assumption for a more sophisticated strategy.
 
-    def close_call_side(self):
+    def close_spread(self, right):
         # Get all the open positions
         positions = self.get_positions()
 
-        close_status = "no call side to close"
+        close_status = "no side to close"
 
         # Loop through and close all of the calls
         for position in positions:
             # If the position is an option
             if position.asset.asset_type == "option":
-                if position.asset.right == "CALL":
+                if position.asset.right == right:
                     # call_sell_order = self.get_selling_order(position)
                     asset = Asset(
                         position.asset.symbol,
@@ -830,33 +830,6 @@ class OptionsIronCondorMWT(Strategy):
                     self.submit_order(call_close_order)
                         
         return 
-    
-    def close_put_side(self):
-        positions = self.get_positions()
-
-        # Loop through and close all of the puts
-        for position in positions:
-            # If the position is an option
-            if position.asset.asset_type == "option":
-                if position.asset.right == "PUT":
-                    asset = Asset(
-                        position.asset.symbol,
-                        asset_type="option",
-                        expiration=position.asset.expiration,
-                        strike=position.asset.strike,
-                        right=position.asset.right,
-                    )
-                    # If this is a short we buy to close if it is long we sell to close
-                    if position.quantity < 0:
-                        action = "buy"
-                    else:
-                        action = "sell"
-
-                    call_close_order = self.create_order(asset, abs(position.quantity), action)
-
-                    self.submit_order(call_close_order)
-
-        return
     
     # IMS This code assumes we only have one condor open at a time.  It loops through and calculates
     # the current credit of the condor.  This is not a good assumption for a more sophisticated strategy.
@@ -949,7 +922,7 @@ class OptionsIronCondorMWT(Strategy):
 if __name__ == "__main__":
         # Backtest this strategy
         backtesting_start = datetime(2020, 2, 3)
-        backtesting_end = datetime(2020, 6, 30)
+        backtesting_end = datetime(2020, 12, 31)
 
         trading_fee = TradingFee(percent_fee=0.007)  # IMS account for trading fees and slipage
 
