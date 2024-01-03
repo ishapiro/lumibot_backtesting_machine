@@ -76,10 +76,11 @@ for toml_file in files:
 
         # Clean out the log direcectory from the privious run.  We do this since at the end of each run
         # we copy the log files to the strategy log directory.
-        files = os.listdir("logs/")
-        # Delete each file in the log directory
-        for file in files:
-            os.remove(os.path.join("logs/", file))
+        if os.path.exists("logs/"):
+            files = os.listdir("logs/")
+            # Delete each file in the log directory
+            for file in files:
+                os.remove(os.path.join("logs/", file))
 
         # Execute the strategy with the parameters from the TOML file
         OptionsIronCondorMWT.backtest(
