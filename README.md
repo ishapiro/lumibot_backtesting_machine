@@ -20,7 +20,9 @@ polygon_test_api.py -- this is a simple test of the polygon API
 
 ## Strategy Configuration Files
 
-Strategies parameters are defined in a file named strategy_parameters.toml with the following format:
+Strategies parameters are defined toml files located in the strategy_configurations directory. The log files
+from each strategy run are located in the strategy_logs directory with the same name as the 
+configuration file that produced the log.
 
 ```
 symbol = "SPY"

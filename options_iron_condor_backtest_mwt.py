@@ -94,7 +94,8 @@ class OptionsIronCondorMWT(Strategy):
         "minimum_hold_period": 5,  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
         "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.25), # Need to add logic to limit trade size based on margin requirements.  Added 20% for safety since I am likely to only allocate 80% of the account.
-        "strike_roll_distance" : (0.10 * distance_of_wings) # How close to the short do we allow the price to move before rolling.
+        "strike_roll_distance" : (0.10 * distance_of_wings), # How close to the short do we allow the price to move before rolling.
+        "wing_algorithm" : "strike" # "delta" or "strike" -- how to calculate the wing distance
     }
 
     parameters_for_debug = pformat(parameters)

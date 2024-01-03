@@ -5,20 +5,19 @@ from lumibot.backtesting import PolygonDataBacktesting
 from options_iron_condor_backtest_mwt import OptionsIronCondorMWT
 from lumibot.entities import TradingFee
 import os
+import shutil
 import toml
 import pprint
 pp = pprint.PrettyPrinter(indent=4)
 
 '''
-The Plan ---
+The Plan --- This is a work in process ...
 
-This module reads parameters from a TOML configuration file and the runs a backtest.
+This module reads parameters from a TOML configuration file from the strategy_configurations
+directory runs the strategy and puts the logs in the strategy_logs directory with the same
+name as the configuration file.  The TOML file can have any name but should end with .toml
 
-If there is only one TOML file it should be named strategy_parameters.toml
 
-At the conclusion of the run it creates a directory for the test run and moves the log
-files from the "log" directory to this new directory.  It also creates a file called
-"backtest_results.csv" in the new directory that contains the summary of the results.
 '''
 
 distance_of_wings = 15 # reference in multiple parameters below, in dollars not strikes
@@ -39,8 +38,19 @@ strategy_parameters = {
     "trading_fee_percent" : 0.007 # The percent fee charged by the broker for each trade
 }
 
+# Get a list of all files in the current directory
+files = os.listdir("strategy_configurations/")
+
+# Look for configurations files in the strategy configuration directory
+for toml_file in files:
+    # Check if the file is a TOML file
+    if toml_file.endswith('.toml'):
+        strategy_file = toml_file
+        print(f"Strategy file found: {strategy_file}")
+        break
+
 # Read parameters from a TOML file
-strategy_parameters = toml.load("strategy_parameters.toml")
+strategy_parameters = toml.load(f"strategy_configurations/{strategy_file}")
 print()
 print("**************************************************")
 print("Strategy Parameters read from TOML file")
@@ -76,4 +86,19 @@ OptionsIronCondorMWT.backtest(
     name=strategy_name,
     budget = capital_budget,
 )
- 
+
+source_dir = "logs/"
+strategy_directory = strategy_file.split(".")[0]    
+target_dir = f"strategy_logs/{strategy_directory}/"
+
+# Create the target directory if it does not exist
+os.makedirs(target_dir, exist_ok=True)
+
+# Get a list of all files in Lumibot log directory
+files = os.listdir(source_dir)
+
+# Copy each file to the strategy log directory
+# Leave in the original log directory so the browser can display it
+for file in files:
+    shutil.copy(os.path.join(source_dir, file), target_dir)
+
