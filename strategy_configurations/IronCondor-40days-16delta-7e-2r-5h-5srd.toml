@@ -13,6 +13,7 @@ strike_roll_distance = 5 # How close to the short do we allow the price to move 
 trading_fee_percent = 0.07 # Commmision and slipage
 wing_algorithm = "strike" # delta or strike, NOT IMPLEMENTED YET
 max_loss_multiplier = 2.0 # The maximum loss as a multiple of initial credit, set to 0 to disable
+loss_duration_adjustment = 20 # The number of days to add to the duration of the option if the last condor was a loss
 roll_strategy = "short" # short, obosite, or both NOT IMPLEMENTED YET
 starting_date = 2020-02-01
 ending_date = 2020-04-30
