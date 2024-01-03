@@ -5,6 +5,7 @@ from lumibot.backtesting import PolygonDataBacktesting
 from options_iron_condor_backtest_mwt import OptionsIronCondorMWT
 from lumibot.entities import TradingFee
 import os
+import time
 import shutil
 import toml
 import pprint
@@ -121,4 +122,8 @@ for toml_file in files:
         # Leave in the original log directory so the browser can display it
         for file in files:
             shutil.copy(os.path.join(source_dir, file), target_dir)
+
+        # Wait 10 seconds so lumibot can finish writing the log files before starting the next iteration
+        print("Waiting 10 seconds for Lumibot to finish writing log files")
+        time.sleep(10)
 
