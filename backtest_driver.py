@@ -10,16 +10,27 @@ import toml
 import pprint
 pp = pprint.PrettyPrinter(indent=4)
 
-'''
+"""
+Author:  Irv Shapiro
+License: MIT License
+
 The Plan --- This is a work in process ...
 
-This module reads parameters from a TOML configuration file from the strategy_configurations
-directory runs the strategy and puts the logs in the strategy_logs directory with the same
+This module reads parameters from a TOML configuration located in the strategy_configurations
+directory, runs the strategy and moves the logs in the strategy_logs directory with the same
 name as the configuration file.  The TOML file can have any name but should end with .toml
 
+"""
 
-'''
+"""
+Disclaimer: The options strategies presented within this content are intended for educational purposes only. They are not meant to be used for trading live stocks or any other financial instruments. The information provided is based on historical data and hypothetical scenarios, and it does not guarantee future results or profits.
 
+Trading stocks and options involve substantial risks and may result in the loss of your invested capital. It is essential to conduct thorough research, seek advice from a qualified financial professional, and carefully consider your risk tolerance before engaging in any trading activities.
+
+By accessing and utilizing the information presented, you acknowledge that you are solely responsible for any trading decisions you make. Neither the author nor any associated parties shall be held liable for any losses, damages, or consequences arising from the use of the strategies discussed in this content.
+"""
+
+# These are just defining defaults that are overriden by the TOML file
 distance_of_wings = 15 # reference in multiple parameters below, in dollars not strikes
 quantity_to_trade = 10 # reference in multiple parameters below, number of contracts
 strategy_parameters = {
@@ -37,7 +48,6 @@ strategy_parameters = {
     "strike_roll_distance" : (0.10 * distance_of_wings), # How close to the short do we allow the price to move before rolling.
     "trading_fee_percent" : 0.007 # The percent fee charged by the broker for each trade
 }
-
 
 # Get a list of all files in the current directory
 files = os.listdir("strategy_configurations/")
