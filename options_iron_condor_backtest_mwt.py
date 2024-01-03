@@ -255,7 +255,8 @@ class OptionsIronCondorMWT(Strategy):
                 if days_to_expiry <= days_before_expiry_to_buy_back:
                     # We need to buy back the option
                     sell_the_condor = True
-                    close_reason = "Closing for days before expiration"
+                    current_credit = self.get_current_credit()
+                    close_reason = f"Closing for days before expiration: current credit {current_credit}"
                     break
 
                 # IMS roll when we are within a range of the short strikes
@@ -299,7 +300,8 @@ class OptionsIronCondorMWT(Strategy):
                 sell_the_condor = True
                 roll_call_short = False
                 roll_put_short = False
-                close_reason = "Closing for maximum rolls exceeded"
+                current_credit = self.get_current_credit()
+                close_reason = f"Closing max rolls exceeded: current credit {current_credit}"
 
         ########################################################################
         # Check for maximum loss which will override all other conditions
@@ -837,8 +839,9 @@ class OptionsIronCondorMWT(Strategy):
     def maximum_loss_exceeded(self, initial_maximum_credit, max_loss_multiplier):
 
         current_credit = self.get_current_credit()
+        max_loss_allowed = -initial_maximum_credit * max_loss_multiplier
     
-        if current_credit < (-initial_maximum_credit * max_loss_multiplier):
+        if current_credit < max_loss_allowed:
             return True
         else:
             return False
@@ -921,8 +924,8 @@ class OptionsIronCondorMWT(Strategy):
 
 if __name__ == "__main__":
         # Backtest this strategy
-        backtesting_start = datetime(2020, 2, 3)
-        backtesting_end = datetime(2020, 12, 31)
+        backtesting_start = datetime(2021, 1, 1)
+        backtesting_end = datetime(2023, 12, 31)
 
         trading_fee = TradingFee(percent_fee=0.007)  # IMS account for trading fees and slipage
 
