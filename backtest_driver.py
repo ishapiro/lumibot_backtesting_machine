@@ -38,6 +38,7 @@ strategy_parameters = {
     "trading_fee_percent" : 0.007 # The percent fee charged by the broker for each trade
 }
 
+
 # Get a list of all files in the current directory
 files = os.listdir("strategy_configurations/")
 
@@ -73,8 +74,14 @@ for toml_file in files:
 
         trading_fee = TradingFee(percent_fee=strategy_parameters["trading_fee_percent"])  # Account for trading fees and slipage
 
-        # Execute the strategy with the current parameters
+        # Clean out the log direcectory from the privious run.  We do this since at the end of each run
+        # we copy the log files to the strategy log directory.
+        files = os.listdir("logs/")
+        # Delete each file in the log directory
+        for file in files:
+            os.remove(os.path.join("logs/", file))
 
+        # Execute the strategy with the parameters from the TOML file
         OptionsIronCondorMWT.backtest(
             PolygonDataBacktesting,
             backtesting_start,
@@ -88,6 +95,7 @@ for toml_file in files:
             budget = capital_budget,
         )
 
+        # Copy the log files to the strategy log directory
         source_dir = "logs/"
         strategy_directory = strategy_file.split(".")[0]    
         target_dir = f"strategy_logs/{strategy_directory}/"
