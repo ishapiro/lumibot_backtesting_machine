@@ -175,8 +175,8 @@ class OptionsIronCondorMWT(Strategy):
             self.add_marker(
                     f"Parameters used in this model",
                     value=underlying_price+30,
-                    color="green",
-                    symbol="hexagon-open",  
+                    color="pink",
+                    symbol="square-dot" 
                     detail_text=self.parameters_for_debug
                 )
             # Get next 3rd Friday expiry after the date
@@ -431,7 +431,7 @@ class OptionsIronCondorMWT(Strategy):
                     f"Short hold period was not exceeded: {self.hold_length}<{minimum_hold_period}",
                     value=underlying_price,
                     color="yellow",
-                    symbol="square-dot",
+                    symbol="hexagon-open",
                     detail_text=f"Date: {dt}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}"
                 )
                 return
@@ -439,11 +439,11 @@ class OptionsIronCondorMWT(Strategy):
             roll_message = ""
             roll_close_status = ""
             if roll_call_short:
-                roll_message = f"Rolling CALL {roll_strategy}, {delta_message} "
+                # roll_message = f"Rolling CALL {roll_strategy}, {delta_message} "
                 side = "call"
                 roll_close_status = self.close_spread(side)
             if roll_put_short:
-                roll_message = f"Rolling PUT {roll_strategy}, {delta_message} "
+                # roll_message = f"Rolling PUT {roll_strategy}, {delta_message} "
                 side = "put"
                 roll_close_status = self.close_spread(side)
             
