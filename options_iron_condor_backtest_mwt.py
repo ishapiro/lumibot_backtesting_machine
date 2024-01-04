@@ -90,9 +90,9 @@ class OptionsIronCondorMWT(Strategy):
         "minimum_hold_period": 7,  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
         "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.5), # Need to add logic to limit trade size based on margin requirements.  Added 20% for safety since I am likely to only allocate 80% of the account.
-        "strike_roll_distance" : (0.10 * distance_of_wings), # How close to the short do we allow the price to move before rolling.
+        "strike_roll_distance" : 1, # How close to the short do we allow the price to move before rolling.
         "max_loss_multiplier" : 3.0, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
-        "roll_strategy" : "delta", # short, delta, none # IMS not fully implemented
+        "roll_strategy" : "short", # short, delta, none # IMS not fully implemented
         "delta_threshold" : 0.30, # If roll_strategy is delta this is the delta threshold for rolling
     }
 
@@ -275,6 +275,7 @@ class OptionsIronCondorMWT(Strategy):
                 call_short_strike_boundary = None
                 put_short_strike_boundary = None
                 roll_reason = "Rolling, unknown reason"
+                delta_message = ""
 
                 # Currently all adjustments are made on the short side of the condor
                 if position.quantity < 0:
@@ -291,6 +292,7 @@ class OptionsIronCondorMWT(Strategy):
                             if greeks["delta"] > delta_threshold:
                                 roll_call_short = True
                                 roll_reason = f"Closing for CALL short delta: {greeks['delta']}"
+                                delta_message = f"delta: {greeks['delta']}"
                                 break
                         
                         if roll_strategy == "short":
@@ -299,7 +301,7 @@ class OptionsIronCondorMWT(Strategy):
                             if underlying_price >= call_short_strike_boundary:
                                 # If it is, we need to roll the option
                                 roll_call_short = True
-                                roll_reason = f"Closing call short distance"
+                                roll_reason = f"Closing for distance to CALL short strike"
                                 break
 
                     # Check if the option is a put
@@ -310,6 +312,7 @@ class OptionsIronCondorMWT(Strategy):
                             if abs(greeks["delta"]) > delta_threshold:
                                 roll_call_short = True
                                 roll_reason = f"Closing for PUT short delta: {greeks['delta']}"
+                                delta_message = f"delta: {greeks['delta']}"
                                 break
                         
                         if roll_strategy == "short":
@@ -318,7 +321,7 @@ class OptionsIronCondorMWT(Strategy):
                             if underlying_price <= put_short_strike_boundary:
                                 # If it is, we need to roll the option
                                 roll_put_short = True
-                                roll_reason = f"Closing PUT short distance"
+                                roll_reason = f"Closing for distance to PUT short strike"
                                 break
         
         #######################################################################
@@ -428,7 +431,7 @@ class OptionsIronCondorMWT(Strategy):
                     f"Short hold period was not exceeded: {self.hold_length}<{minimum_hold_period}",
                     value=underlying_price,
                     color="yellow",
-                    symbol="x-thin",
+                    symbol="square-dot",
                     detail_text=f"Date: {dt}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}"
                 )
                 return
@@ -436,11 +439,11 @@ class OptionsIronCondorMWT(Strategy):
             roll_message = ""
             roll_close_status = ""
             if roll_call_short:
-                roll_message = f"Rolling CALL {roll_strategy}, delta {self.roll_current_delta}: "
+                roll_message = f"Rolling CALL {roll_strategy}, {delta_message} "
                 side = "call"
                 roll_close_status = self.close_spread(side)
             if roll_put_short:
-                roll_message = f"Rolling PUT {roll_strategy}, delta {self.roll_current_delta}: "
+                roll_message = f"Rolling PUT {roll_strategy}, {delta_message} "
                 side = "put"
                 roll_close_status = self.close_spread(side)
             
