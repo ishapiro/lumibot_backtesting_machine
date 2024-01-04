@@ -176,7 +176,7 @@ class OptionsIronCondorMWT(Strategy):
                     f"Parameters used in this model",
                     value=underlying_price+30,
                     color="pink",
-                    symbol="square-dot" 
+                    symbol="square-dot", 
                     detail_text=self.parameters_for_debug
                 )
             # Get next 3rd Friday expiry after the date
@@ -219,6 +219,15 @@ class OptionsIronCondorMWT(Strategy):
             # print (f"<br>my_orders: {my_orders}<br>")
 
             return
+
+        # DBUG CODE
+        # if not self.first_iteration:
+        #     # IMS Debug check the current credit of the condor
+        #     current_credit, legs = self.get_current_credit()
+        #     print(f"************ current_credit: {current_credit}\n")
+        #     pp.pprint(legs)
+        #     print ("************\n")
+
 
         # Get all the open positions
         positions = self.get_positions()
@@ -266,8 +275,8 @@ class OptionsIronCondorMWT(Strategy):
                 if days_to_expiry <= days_before_expiry_to_buy_back:
                     # We need to buy back the option
                     sell_the_condor = True
-                    current_credit = self.get_current_credit()
-                    close_reason = f"Closing for days before expiration: current credit {current_credit}"
+                    current_credit, legs = self.get_current_credit()
+                    close_reason = f"Closing for days before expiration: credit {current_credit} = {legs[0]} + {legs[1]} + {legs[2]} + {legs[3]}"
                     break
 
                 # Base on the value of roll_strategy, determine if we need to roll on delta or on how close
@@ -291,7 +300,7 @@ class OptionsIronCondorMWT(Strategy):
                             # Check if the delta is above the delta required
                             if greeks["delta"] > delta_threshold:
                                 roll_call_short = True
-                                roll_reason = f"Closing for CALL short delta: {greeks['delta']}"
+                                roll_reason = f"Rolling for CALL short delta"
                                 delta_message = f"delta: {greeks['delta']}"
                                 break
                         
@@ -301,7 +310,7 @@ class OptionsIronCondorMWT(Strategy):
                             if underlying_price >= call_short_strike_boundary:
                                 # If it is, we need to roll the option
                                 roll_call_short = True
-                                roll_reason = f"Closing for distance to CALL short strike"
+                                roll_reason = f"Rolling for distance to CALL short strike"
                                 break
 
                     # Check if the option is a put
@@ -311,7 +320,7 @@ class OptionsIronCondorMWT(Strategy):
                             # Check if the delta is above the delta required
                             if abs(greeks["delta"]) > delta_threshold:
                                 roll_call_short = True
-                                roll_reason = f"Closing for PUT short delta: {greeks['delta']}"
+                                roll_reason = f"Rolling for PUT short delta"
                                 delta_message = f"delta: {greeks['delta']}"
                                 break
                         
@@ -321,7 +330,7 @@ class OptionsIronCondorMWT(Strategy):
                             if underlying_price <= put_short_strike_boundary:
                                 # If it is, we need to roll the option
                                 roll_put_short = True
-                                roll_reason = f"Closing for distance to PUT short strike"
+                                roll_reason = f"Rolling for distance to PUT short strike"
                                 break
         
         #######################################################################
@@ -334,8 +343,8 @@ class OptionsIronCondorMWT(Strategy):
                 sell_the_condor = True
                 roll_call_short = False
                 roll_put_short = False
-                current_credit = self.get_current_credit()
-                close_reason = f"{roll_reason}, rolls ({self.roll_count}) exceeded: current credit {current_credit}"
+                current_credit, legs = self.get_current_credit()
+                close_reason = f"{roll_reason}, rolls ({self.roll_count}) exceeded: credit {current_credit} = {legs[0]} + {legs[1]} + {legs[2]} + {legs[3]}"
 
         ########################################################################
         # Check for maximum loss which will override all other conditions
@@ -345,8 +354,8 @@ class OptionsIronCondorMWT(Strategy):
             sell_the_condor = True
             roll_call_short = False
             roll_put_short = False
-            current_credit = self.get_current_credit()
-            close_reason = f"Closing for maximum loss: current credit {current_credit}"
+            current_credit, legs = self.get_current_credit()
+            close_reason = f"Closing for maximum loss: credit {current_credit} = {legs[0]} + {legs[1]} + {legs[2]} + {legs[3]}"
 
         ########################################################################
         # Now execute the close and roll conditions
@@ -439,11 +448,11 @@ class OptionsIronCondorMWT(Strategy):
             roll_message = ""
             roll_close_status = ""
             if roll_call_short:
-                # roll_message = f"Rolling CALL {roll_strategy}, {delta_message} "
+                roll_message = f"{roll_reason}, {delta_message} "
                 side = "call"
                 roll_close_status = self.close_spread(side)
             if roll_put_short:
-                # roll_message = f"Rolling PUT {roll_strategy}, {delta_message} "
+                roll_message = f"{roll_reason}, {delta_message} "
                 side = "put"
                 roll_close_status = self.close_spread(side)
             
@@ -663,15 +672,24 @@ class OptionsIronCondorMWT(Strategy):
         
         call_sell_price, call_buy_price, put_sell_price, put_buy_price = 0, 0, 0, 0
         # These will be estimates since we do not have the acutual fill prices at this time
+        # We cannot use the get_current_credit method since the order is not live yet
         if (call_sell_order):
             call_sell_price = self.get_last_price(call_sell_order.asset)
         if (call_buy_order):
             call_buy_price = self.get_last_price(call_buy_order.asset)
         if (put_sell_order):
             put_sell_price = self.get_last_price(put_sell_order.asset)
-        if (put_sell_order):
+        if (put_buy_order):
             put_buy_price = self.get_last_price(put_buy_order.asset)
         maximum_credit = round(call_sell_price - call_buy_price + put_sell_price - put_buy_price,2)
+
+        # IMS Debug check the current credit of the condor
+        # print(f"************ initial_credit: {maximum_credit}\n")
+        # print(f"call_sell_price: {call_sell_price}\n")
+        # print(f"call_buy_price: {call_buy_price}\n")
+        # print(f"put_sell_price: {put_sell_price}\n")
+        # print(f"put_buy_price: {put_buy_price}\n")
+        # print ("************\n")
       
         ############################################
         # Return an appropriate status
@@ -873,7 +891,7 @@ class OptionsIronCondorMWT(Strategy):
     
     def maximum_loss_exceeded(self, initial_maximum_credit, max_loss_multiplier):
 
-        current_credit = self.get_current_credit()
+        current_credit, legs = self.get_current_credit()
         max_loss_allowed = initial_maximum_credit * max_loss_multiplier
     
         if current_credit < -max_loss_allowed:
@@ -886,6 +904,7 @@ class OptionsIronCondorMWT(Strategy):
         
     def get_current_credit(self):
         current_credit = 0
+        option_legs = []
         positions = self.get_positions()
         # Loop through and close all of the puts
         for position in positions:
@@ -900,11 +919,15 @@ class OptionsIronCondorMWT(Strategy):
                 )
                 last_price = self.get_last_price(asset)
                 if position.quantity >= 0:
-                    current_credit += last_price
-                else:
                     current_credit -= last_price
+                    option_legs.append(last_price)
+                else:
+                    current_credit += last_price
+                    option_legs.append(-last_price)
+
+                i =+ 1
         
-        return round(current_credit,2)
+        return round(current_credit,2), option_legs
     
     def search_next_market_date( self, expiry, symbol, rounded_underlying_price):
 
