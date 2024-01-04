@@ -1,5 +1,9 @@
 Lumibot Iron Condor Benchmarking Experiment
 
+**THIS FRAMEWORK IS NOT READY FOR USE AND SHOULD BE CONSIDERED AN ALPHA RELEASE**
+
+**DO NOT TRADE BASED ON THE RESULTS OF THIS FRAMEWORK**
+
 # Iron Condor Backtesting Strategy
 
 Disclaimer: The options strategies presented within this content are intended for educational purposes only. They are not meant to be used for trading live stocks or any other financial instruments. The information provided is based on historical data and hypothetical scenarios, and it does not guarantee future results or profits.
