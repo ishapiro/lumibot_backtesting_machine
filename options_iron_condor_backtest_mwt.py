@@ -987,9 +987,9 @@ class OptionsIronCondorMWT(Strategy):
 if __name__ == "__main__":
         # Backtest this strategy
         backtesting_start = datetime(2020, 3, 1)
-        backtesting_end = datetime(2020, 7, 31)
+        backtesting_end = datetime(2023, 12, 31)
 
-        trading_fee = TradingFee(percent_fee=0.007)  # IMS account for trading fees and slippage
+        trading_fee = TradingFee(flat_fee=0.60)  # IMS account for trading fees and slippage
 
         # polygon_has_paid_subscription is set to true to api calls are not throttled
         OptionsIronCondorMWT.backtest(
