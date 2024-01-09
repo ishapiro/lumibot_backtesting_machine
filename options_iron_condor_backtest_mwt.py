@@ -30,18 +30,18 @@ Author: Irv Shapiro (ishapiro@cogitations.com)
 YouTube: MakeWithTech
 Websites: https://www.makewithtech.com, https://cogitations.com
 
-Based on: Lumibot Condor Example, modified to incorportate concepts discuss in the SMB Capital
+Based on: Lumibot Condor Example, modified to incorporate concepts discuss in the SMB Capital
 Options Trading Course.
 
 NOTE: The current version assumes only one condor is open at a time!!!
 NOTE: Maximum margin is not enforced!!!
 
-This parameterized Iron Condor Test is desgined to facilitate testing condors across a range of names,
+This parameterized Iron Condor Test is designed to facilitate testing condors across a range of names,
 deltas and expiration dates.
 
 An iron condor is a market neutral strategy that profits when the underlying asset stays within a range.
 
-Explaination of Iron Condor Parameters:
+Explanation of Iron Condor Parameters:
 
     Condor Example
     
@@ -51,13 +51,13 @@ Explaination of Iron Condor Parameters:
     Initial Stock Position
     
     put short position
-    put long posittion
+    put long position
 
 The benchmark is designed to evaluate a range of Iron Condor parameters ranging from the delta of the shorts,
 the distance of the wings, the days before expiration to exit the trade, and the days before expiration to roll
 one of the spreads.
 
-It also supports setting an optionb maximum loss.  The maximum loss is the initial credit * max_loss_multiplier.
+It also supports setting an option maximum loss.  The maximum loss is the initial credit * max_loss_multiplier.
 
 The roll logic can be based on delta or distance to the short strike.  The delta threshold is the delta of the
 short strike that will trigger a roll.  The distance to the short strike is the distance in dollars that the
@@ -81,7 +81,7 @@ class OptionsIronCondorMWT(Strategy):
     parameters = {
         "symbol": "SPY",
         "option_duration": 40,  # How many days until the call option expires when we sell it
-        "strike_step_size": 1,  # IMS Is this the strike spacing of the specific asset, can we get this from Poloygon?
+        "strike_step_size": 1,  # IMS Is this the strike spacing of the specific asset, can we get this from Polygon?
         "delta_required": 0.16,  # The delta of the option we want to sell
         "roll_delta_required": 0.20,  # The delta of the option we want to sell when we do a roll
         "maximum_rolls": 2,  # The maximum number of rolls we will do
@@ -147,6 +147,7 @@ class OptionsIronCondorMWT(Strategy):
         minimum_hold_period  = self.parameters[
             "minimum_hold_period"
         ]
+        
         strike_roll_distance = self.parameters["strike_roll_distance"]
         maximum_rolls = self.parameters["maximum_rolls"]
         max_loss_multiplier = self.parameters["max_loss_multiplier"]
@@ -169,7 +170,7 @@ class OptionsIronCondorMWT(Strategy):
         # On first trading iteration, create the initial condor
         # IMS Once again this only works because we only hold one condor
         # a more sophisticated strategy using multiple condors will have to 
-        # carfully track the margin reserve
+        # carefully track the margin reserve
         if self.first_iteration:
             # Output the parameters of the strategy to the indicator file
             self.add_marker(
@@ -187,7 +188,7 @@ class OptionsIronCondorMWT(Strategy):
             # if expiry == break_date:
             #     print("break")
 
-            # Create the intial condor
+            # Create the initial condor
             condor_status, call_strike, put_strike, maximum_credit = self.create_condor(
                 symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, "both"
             )
@@ -220,7 +221,7 @@ class OptionsIronCondorMWT(Strategy):
 
             return
 
-        # DBUG CODE
+        # DEBUG CODE
         # if not self.first_iteration:
         #     # IMS Debug check the current credit of the condor
         #     current_credit, legs = self.get_current_credit()
@@ -239,7 +240,7 @@ class OptionsIronCondorMWT(Strategy):
         call_strike = None
         put_strike = None
         original_expiration_date = None
-        close_reason = "Closing, unkonwn reason"
+        close_reason = "Closing, unknown reason"
 
         ###################################################################################
         # Loop through all of the open positions
@@ -253,7 +254,7 @@ class OptionsIronCondorMWT(Strategy):
         ###################################################################################
 
         for position in positions:
-            # Reset sell/roll indicator before exit postions
+            # Reset sell/roll indicator before exit positions
             roll_call_short = False
             roll_put_short = False
             sell_the_condor = False
@@ -365,8 +366,8 @@ class OptionsIronCondorMWT(Strategy):
         if sell_the_condor:
             
             # The prior condor was closed because we approach the expiration date.  It is generally dangerous
-            # to leave condors active since the gamma of the options excellerate as we approach the 
-            # expiration date. Another way of saying the above is the pricing of options become more volitile
+            # to leave condors active since the gamma of the options accelerate as we approach the 
+            # expiration date. Another way of saying the above is the pricing of options become more volatile
             # as we approach the expiration date.  
 
             self.sell_all()
@@ -480,7 +481,7 @@ class OptionsIronCondorMWT(Strategy):
             )
 
             # Use the original option expiration date when we only roll one side
-            # Howver, we do use a diffent delta for the new short strike
+            # However, we do use a different delta for the new short strike
             # By lowering the delta we reduce the risk it will be hit again
             roll_expiry = original_expiration_date
 
@@ -671,7 +672,7 @@ class OptionsIronCondorMWT(Strategy):
         ############################################
         
         call_sell_price, call_buy_price, put_sell_price, put_buy_price = 0, 0, 0, 0
-        # These will be estimates since we do not have the acutual fill prices at this time
+        # These will be estimates since we do not have the actual fill prices at this time
         # We cannot use the get_current_credit method since the order is not live yet
         if (call_sell_order):
             call_sell_price = self.get_last_price(call_sell_order.asset)
@@ -981,16 +982,16 @@ class OptionsIronCondorMWT(Strategy):
 # If this module is run as a script it will invoke the backtest method in the Lumibot framework.
 ################################################################################################
     
-# Make sure that the dates selected are supported by you Polycon.io subscription
+# Make sure that the dates selected are supported by you Polygon.io subscription
 
 if __name__ == "__main__":
         # Backtest this strategy
-        backtesting_start = datetime(2023, 1, 1)
-        backtesting_end = datetime(2023, 12, 31)
+        backtesting_start = datetime(2020, 3, 1)
+        backtesting_end = datetime(2020, 7, 31)
 
-        trading_fee = TradingFee(percent_fee=0.007)  # IMS account for trading fees and slipage
+        trading_fee = TradingFee(percent_fee=0.007)  # IMS account for trading fees and slippage
 
-        # polygon_has_paid_subscription is set to true to api calls are not thottled
+        # polygon_has_paid_subscription is set to true to api calls are not throttled
         OptionsIronCondorMWT.backtest(
             PolygonDataBacktesting,
             backtesting_start,
@@ -1002,5 +1003,7 @@ if __name__ == "__main__":
             polygon_has_paid_subscription=True,
             name=OptionsIronCondorMWT.strategy_name,
             budget = OptionsIronCondorMWT.parameters["budget"],
+            show_tearsheet = False,
+            show_plot = False,
         )
  
