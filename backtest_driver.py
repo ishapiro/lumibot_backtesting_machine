@@ -83,7 +83,7 @@ for toml_file in files:
 
         strategy_name = f'ic-{strategy_parameters["symbol"]}-{strategy_parameters["delta_required"]}delta-{strategy_parameters["option_duration"]}dur-{strategy_parameters["days_before_expiry_to_buy_back"]}ex-{strategy_parameters["minimum_hold_period"]}hd'
 
-        trading_fee = TradingFee(percent_fee=strategy_parameters["trading_fee_percent"])  # Account for trading fees and slipage
+        trading_fee = TradingFee(flat_fee=strategy_parameters["trading_fee"])  # Account for trading fees and slipage
 
         # Clean out the log direcectory from the privious run.  We do this since at the end of each run
         # we copy the log files to the strategy log directory.

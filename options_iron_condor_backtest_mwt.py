@@ -232,6 +232,9 @@ class OptionsIronCondorMWT(Strategy):
 
         # Get all the open positions
         positions = self.get_positions()
+        if len(positions) > 5:
+            breakpoint()
+            print ("***** bug identitied, too many legs *****")
 
         roll_call_short = False
         roll_put_short = False
@@ -320,7 +323,7 @@ class OptionsIronCondorMWT(Strategy):
                         if roll_strategy == "delta":
                             # Check if the delta is above the delta required
                             if abs(greeks["delta"]) > delta_threshold:
-                                roll_call_short = True
+                                roll_put_short = True
                                 roll_reason = f"Rolling for PUT short delta"
                                 delta_message = f"delta: {greeks['delta']}"
                                 break
@@ -857,6 +860,8 @@ class OptionsIronCondorMWT(Strategy):
     # all the options.  This is not a good assumption for a more sophisticated strategy.
 
     def close_spread(self, right):
+        # Make sure the right is in upper case because the asset.right is upper case
+        right = right.upper()
         # Get all the open positions
         positions = self.get_positions()
 
@@ -987,7 +992,7 @@ class OptionsIronCondorMWT(Strategy):
 if __name__ == "__main__":
         # Backtest this strategy
         backtesting_start = datetime(2020, 3, 1)
-        backtesting_end = datetime(2023, 12, 31)
+        backtesting_end = datetime(2020, 12, 31)
 
         trading_fee = TradingFee(flat_fee=0.60)  # IMS account for trading fees and slippage
 
@@ -1003,7 +1008,5 @@ if __name__ == "__main__":
             polygon_has_paid_subscription=True,
             name=OptionsIronCondorMWT.strategy_name,
             budget = OptionsIronCondorMWT.parameters["budget"],
-            show_tearsheet = False,
-            show_plot = False,
         )
  
