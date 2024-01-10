@@ -91,9 +91,10 @@ class OptionsIronCondorMWT(Strategy):
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
         "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.5), # Need to add logic to limit trade size based on margin requirements.  Added 20% for safety since I am likely to only allocate 80% of the account.
         "strike_roll_distance" : 1, # How close to the short do we allow the price to move before rolling.
-        "max_loss_multiplier" : 3.0, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
+        "max_loss_multiplier" : 1.25, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
         "roll_strategy" : "short", # short, delta, none # IMS not fully implemented
         "delta_threshold" : 0.30, # If roll_strategy is delta this is the delta threshold for rolling
+        "maximum_portfolio_allocation" : 0.75, # The maximum amount of the portfolio to allocate to this strategy for new condors
     }
 
     # Default values if run directly instead of from backtest_driver program
@@ -132,6 +133,9 @@ class OptionsIronCondorMWT(Strategy):
         # Saved rolled data for debugging
         self.roll_current_delta = 0
 
+        # Saved last trade size -- set in condor creation code
+        self.last_condor_size = 0
+
     def on_trading_iteration(self):
         # Get the parameters
         symbol = self.parameters["symbol"]
@@ -139,20 +143,16 @@ class OptionsIronCondorMWT(Strategy):
         strike_step_size = self.parameters["strike_step_size"]
         delta_required = self.parameters["delta_required"]
         roll_delta_required = self.parameters["roll_delta_required"]
-        days_before_expiry_to_buy_back = self.parameters[
-            "days_before_expiry_to_buy_back"
-        ]
+        days_before_expiry_to_buy_back = self.parameters["days_before_expiry_to_buy_back"]
         distance_of_wings = self.parameters["distance_of_wings"]
         quantity_to_trade = self.parameters["quantity_to_trade"]
-        minimum_hold_period  = self.parameters[
-            "minimum_hold_period"
-        ]
-        
+        minimum_hold_period  = self.parameters["minimum_hold_period"]
         strike_roll_distance = self.parameters["strike_roll_distance"]
         maximum_rolls = self.parameters["maximum_rolls"]
         max_loss_multiplier = self.parameters["max_loss_multiplier"]
         roll_strategy = self.parameters["roll_strategy"]
         delta_threshold = self.parameters["delta_threshold"]
+        maximum_portfolio_allocation = self.parameters["maximum_portfolio_allocation"]
 
         # Get the price of the underlying asset
         underlying_price = self.get_last_price(symbol)
@@ -189,11 +189,13 @@ class OptionsIronCondorMWT(Strategy):
             #     print("break")
 
             # Create the initial condor
-            condor_status, call_strike, put_strike, maximum_credit = self.create_condor(
-                symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, "both"
+            condor_status, call_strike, put_strike, maximum_credit, last_condor_size = self.create_condor(
+                symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, "both", maximum_portfolio_allocation, self.last_condor_size
             )
 
+            # Used when calculating and placing rolls
             self.initial_maximum_credit = maximum_credit
+            self.last_condor_size = last_condor_size
 
             if "Success" in condor_status:
                 self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
@@ -214,20 +216,6 @@ class OptionsIronCondorMWT(Strategy):
                     symbol="asterisk",
                     detail_text=f"Date: {dt}<br>Expiration: {expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}<br>initial credit: {maximum_credit}"
                 ) 
-
-            # Debug Code
-            # my_orders = self.get_orders()
-            # print (f"<br>my_orders: {my_orders}<br>")
-
-            return
-
-        # DEBUG CODE
-        # if not self.first_iteration:
-        #     # IMS Debug check the current credit of the condor
-        #     current_credit, legs = self.get_current_credit()
-        #     print(f"************ current_credit: {current_credit}\n")
-        #     pp.pprint(legs)
-        #     print ("************\n")
 
 
         # Get all the open positions
@@ -402,11 +390,13 @@ class OptionsIronCondorMWT(Strategy):
 
             # Since we close the prior condor and we can open another one with a new expiration date
             # and strike based on the original parameters.
-            condor_status, call_strike, put_strike, maximum_credit = self.create_condor(
-                symbol, new_expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, "both"
+            condor_status, call_strike, put_strike, maximum_credit, last_condor_size = self.create_condor(
+                symbol, new_expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, "both", maximum_portfolio_allocation, self.last_condor_size
             )
 
+            # These values are used for calculating and placing rolls
             self.initial_maximum_credit = maximum_credit
+            self.last_condor_size = last_condor_size
 
             # IMS This is just a place holder.  This need to be rethought.
             self.margin_reserve = distance_of_wings * 100 * quantity_to_trade
@@ -494,8 +484,8 @@ class OptionsIronCondorMWT(Strategy):
             # if roll_expiry.year == 2024:
             #     print("break")
 
-            condor_status, call_strike, put_strike, maximum_credit = self.create_condor(
-                symbol, roll_expiry, strike_step_size, roll_delta_required, quantity_to_trade, distance_of_wings, side
+            condor_status, call_strike, put_strike, maximum_credit, last_condor_size = self.create_condor(
+                symbol, roll_expiry, strike_step_size, roll_delta_required, quantity_to_trade, distance_of_wings, side, maximum_portfolio_allocation, self.last_condor_size
             )
 
             # The maximum_credit is only used when we initiate a new condor, not when we roll
@@ -529,7 +519,7 @@ class OptionsIronCondorMWT(Strategy):
     ##############################################################################################
 
     def create_condor(
-        self, symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, side
+        self, symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, side, maximum_portfolio_allocation, last_condor_size
     ):
 
         status = "no condor created"
@@ -547,6 +537,26 @@ class OptionsIronCondorMWT(Strategy):
         rounded_underlying_price = (
             round(underlying_price / strike_step_size) * strike_step_size
         )
+
+        if side != "both":
+            revised_quantity_to_trade = last_condor_size  # default value
+
+
+        ################################################################
+        # Check the cash available in the account and set the trade size
+        # Only do this for new condors not for rolls
+        ################################################################
+
+        # IMS we need to revise this to consider both cash and margin
+
+        if side == "both":
+            portfolio_value = self.get_portfolio_value()
+            cash_required = distance_of_wings * 100 * quantity_to_trade
+            if cash_required > portfolio_value * maximum_portfolio_allocation:
+                # Reduce the size of the trade
+                revised_quantity_to_trade = int((portfolio_value * maximum_portfolio_allocation) / (distance_of_wings * 100))
+            else:
+                revised_quantity_to_trade = quantity_to_trade
 
         ################################################
         # Find the strikes for both the shorts and longs
@@ -616,7 +626,7 @@ class OptionsIronCondorMWT(Strategy):
                     expiry,
                     strike_step_size,
                     call_strike + call_strike_adjustment,
-                    quantity_to_trade,
+                    revised_quantity_to_trade,
                     distance_of_wings,
                 )
 
@@ -637,7 +647,7 @@ class OptionsIronCondorMWT(Strategy):
                     expiry,
                     strike_step_size,
                     put_strike + put_strike_adjustment,
-                    quantity_to_trade,
+                    revised_quantity_to_trade,
                     distance_of_wings
                 )
 
@@ -719,8 +729,8 @@ class OptionsIronCondorMWT(Strategy):
                 "put": "Success: rolled the put side",
                 "both": "Success the Condor" }
 
-        return status_messages[side], call_strike, put_strike, maximum_credit
-
+        last_condor_size = revised_quantity_to_trade
+        return status_messages[side], call_strike, put_strike, maximum_credit, last_condor_size 
     ############################################
     # Utility functions
     ############################################
