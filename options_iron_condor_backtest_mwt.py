@@ -83,7 +83,7 @@ class OptionsIronCondorMWT(Strategy):
         "option_duration": 40,  # How many days until the call option expires when we sell it
         "strike_step_size": 1,  # IMS Is this the strike spacing of the specific asset, can we get this from Polygon?
         "delta_required": 0.16,  # The delta of the option we want to sell
-        "roll_delta_required": 0.20,  # The delta of the option we want to sell when we do a roll
+        "roll_delta_required": 0.16,  # The delta of the option we want to sell when we do a roll
         "maximum_rolls": 2,  # The maximum number of rolls we will do
         "days_before_expiry_to_buy_back": 7,  # How many days before expiry to buy back the call
         "quantity_to_trade": quantity_to_trade,  # The number of contracts to trade
@@ -91,10 +91,11 @@ class OptionsIronCondorMWT(Strategy):
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
         "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.5), # Need to add logic to limit trade size based on margin requirements.  Added 20% for safety since I am likely to only allocate 80% of the account.
         "strike_roll_distance" : 1, # How close to the short do we allow the price to move before rolling.
-        "max_loss_multiplier" : 1.25, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
+        "max_loss_multiplier" : 3.0, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
         "roll_strategy" : "short", # short, delta, none # IMS not fully implemented
         "delta_threshold" : 0.30, # If roll_strategy is delta this is the delta threshold for rolling
         "maximum_portfolio_allocation" : 0.75, # The maximum amount of the portfolio to allocate to this strategy for new condors
+        "max_loss_trade_days_to_skip" : 3, # The number of days to skip after a max loss trade
     }
 
     # Default values if run directly instead of from backtest_driver program
@@ -136,6 +137,12 @@ class OptionsIronCondorMWT(Strategy):
         # Saved last trade size -- set in condor creation code
         self.last_condor_size = 0
 
+        # Skipped day counter after a max loss
+        self.skipped_days_counter = 0
+
+        # Flag to indicate if we hit a max loss
+        self.max_loss_hit_flag = False
+
     def on_trading_iteration(self):
         # Get the parameters
         symbol = self.parameters["symbol"]
@@ -153,6 +160,7 @@ class OptionsIronCondorMWT(Strategy):
         roll_strategy = self.parameters["roll_strategy"]
         delta_threshold = self.parameters["delta_threshold"]
         maximum_portfolio_allocation = self.parameters["maximum_portfolio_allocation"]
+        max_loss_trade_days_to_skip = self.parameters["max_loss_trade_days_to_skip"]
 
         # Get the price of the underlying asset
         underlying_price = self.get_last_price(symbol)
@@ -167,11 +175,28 @@ class OptionsIronCondorMWT(Strategy):
         # Get the current datetime
         dt = self.get_datetime()
 
-        # On first trading iteration, create the initial condor
-        # IMS Once again this only works because we only hold one condor
-        # a more sophisticated strategy using multiple condors will have to 
-        # carefully track the margin reserve
-        if self.first_iteration:
+        # Check if we need to skip days after a max loss
+        self.skipped_days_counter += 1
+        if self.max_loss_hit_flag and self.skipped_days_counter < max_loss_trade_days_to_skip:
+            return
+        
+        ##############################################################################
+        # Collect the option positions and see if we have a condor.  If we only
+        # have one position it will be the cash position.  If we have more than one
+        # position, we have a condor.  If we have a condor we need to check if we
+        # need to roll or close the condor.
+        ##############################################################################
+
+        # Get all the open positions
+        no_active_condor = False
+        positions = self.get_positions()
+        if len(positions) < 2:
+            no_active_condor = True
+
+        # This strategy keeps one condor active at a time.  If this is the first trading
+        # day or we have no condor active create one and exit.
+            
+        if self.first_iteration or no_active_condor:
             # Output the parameters of the strategy to the indicator file
             self.add_marker(
                     f"Parameters used in this model",
@@ -217,300 +242,306 @@ class OptionsIronCondorMWT(Strategy):
                     detail_text=f"Date: {dt}<br>Expiration: {expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}<br>initial credit: {maximum_credit}"
                 ) 
 
+            
+        else:
+            #######################################################################
+            # End of first iteration or no active condor
+            #######################################################################
 
-        # Get all the open positions
-        positions = self.get_positions()
-        if len(positions) > 5:
-            breakpoint()
-            print ("***** bug identitied, too many legs *****")
-
-        roll_call_short = False
-        roll_put_short = False
-        sell_the_condor = False
-        option_expiry = None
-        call_strike = None
-        put_strike = None
-        original_expiration_date = None
-        close_reason = "Closing, unknown reason"
-
-        ###################################################################################
-        # Loop through all of the open positions
-        # This code assumes only one condor is open at a time
-        # Check for the following conditions:
-        # 1.   Days before expiration to buy back
-        # 2a.  Roll if: Delta of the option is above the delta required or
-        # 2b.  The underlying price is within the strike roll distance of the short strike
-        # 3.   The maximum loss has been exceeded
-        # 4.   The maximum number of rolls has been exceeded
-        ###################################################################################
-
-        for position in positions:
-            # Reset sell/roll indicator before exit positions
             roll_call_short = False
             roll_put_short = False
             sell_the_condor = False
-            position_strike = position.asset.strike
+            option_expiry = None
+            call_strike = None
+            put_strike = None
+            original_expiration_date = None
+            close_reason = "Closing, unknown reason"
 
-            # If the position is an option
-            if position.asset.asset_type == "option":
+            ###################################################################################
+            # Loop through all of the open positions
+            # This code assumes only one condor is open at a time
+            # Check for the following conditions:
+            # 1.   Days before expiration to buy back
+            # 2a.  Roll if: Delta of the option is above the delta required or
+            # 2b.  The underlying price is within the strike roll distance of the short strike
+            # 3.   The maximum loss has been exceeded
+            # 4.   The maximum number of rolls has been exceeded
+            ###################################################################################
 
-                # Get the expiry of the option
-                option_expiry = position.asset.expiration
+            for position in positions:
+                # Reset sell/roll indicator before exit positions
+                roll_call_short = False
+                roll_put_short = False
+                sell_the_condor = False
+                position_strike = position.asset.strike
 
-                # Saved for a potential roll
-                original_expiration_date = option_expiry
+                # If the position is an option
+                if position.asset.asset_type == "option":
 
-                # Check how close to expiry the option is
-                days_to_expiry = (option_expiry - dt.date()).days
+                    # Get the expiry of the option
+                    option_expiry = position.asset.expiration
 
-                # If the option is within the days before expiry to buy back
-                if days_to_expiry <= days_before_expiry_to_buy_back:
-                    # We need to buy back the option
+                    # Saved for a potential roll
+                    original_expiration_date = option_expiry
+
+                    # Check how close to expiry the option is
+                    days_to_expiry = (option_expiry - dt.date()).days
+
+                    # If the option is within the days before expiry to buy back
+                    if days_to_expiry <= days_before_expiry_to_buy_back:
+                        # We need to buy back the option
+                        sell_the_condor = True
+                        current_credit, legs = self.cost_to_close_position()
+                        close_reason = f"Closing for days before expiration: credit {current_credit} = {legs[0]} + {legs[1]} + {legs[2]} + {legs[3]}"
+                        break
+
+                    # Base on the value of roll_strategy, determine if we need to roll on delta or on how close
+                    # the underlying price is to the short strike.
+                    call_short_strike_boundary = None
+                    put_short_strike_boundary = None
+                    roll_reason = "Rolling, unknown reason"
+                    delta_message = ""
+
+                    # Currently all adjustments are made on the short side of the condor
+                    if position.quantity < 0:
+                        # Check the delta of the option if the strategy is delta based
+                        if roll_strategy == "delta":
+                            greeks = self.get_greeks(position.asset)
+                            self.roll_current_delta = greeks["delta"]
+
+                        # Check if the option is a call
+                        if position.asset.right == "CALL":
+
+                            if roll_strategy == "delta":
+                                # Check if the delta is above the delta required
+                                if greeks["delta"] > delta_threshold:
+                                    roll_call_short = True
+                                    roll_reason = f"Rolling for CALL short delta"
+                                    delta_message = f"delta: {greeks['delta']}"
+                                    break
+                            
+                            if roll_strategy == "short":
+                                call_short_strike_boundary = position.asset.strike - strike_roll_distance
+                                call_strike = position.asset.strike
+                                if underlying_price >= call_short_strike_boundary:
+                                    # If it is, we need to roll the option
+                                    roll_call_short = True
+                                    roll_reason = f"Rolling for distance to CALL short strike"
+                                    break
+
+                        # Check if the option is a put
+                        elif position.asset.right == "PUT":
+
+                            if roll_strategy == "delta":
+                                # Check if the delta is above the delta required
+                                if abs(greeks["delta"]) > delta_threshold:
+                                    roll_put_short = True
+                                    roll_reason = f"Rolling for PUT short delta"
+                                    delta_message = f"delta: {greeks['delta']}"
+                                    break
+                            
+                            if roll_strategy == "short":
+                                put_short_strike_boundary = position.asset.strike + strike_roll_distance
+                                put_strike = position.asset.strike
+                                if underlying_price <= put_short_strike_boundary:
+                                    # If it is, we need to roll the option
+                                    roll_put_short = True
+                                    roll_reason = f"Rolling for distance to PUT short strike"
+                                    break
+            
+            #######################################################################
+            # Check if we need to sell the condor completely or roll one spread
+            #######################################################################
+                            
+            if roll_call_short or roll_put_short:
+                self.roll_count += 1
+                if self.roll_count > maximum_rolls:
                     sell_the_condor = True
-                    current_credit, legs = self.get_current_credit()
-                    close_reason = f"Closing for days before expiration: credit {current_credit} = {legs[0]} + {legs[1]} + {legs[2]} + {legs[3]}"
-                    break
+                    roll_call_short = False
+                    roll_put_short = False
+                    current_credit, legs = self.cost_to_close_position()
+                    close_reason = f"{roll_reason}, rolls ({self.roll_count}) exceeded: credit {current_credit} = {legs[0]} + {legs[1]} + {legs[2]} + {legs[3]}"
 
-                # Base on the value of roll_strategy, determine if we need to roll on delta or on how close
-                # the underlying price is to the short strike.
-                call_short_strike_boundary = None
-                put_short_strike_boundary = None
-                roll_reason = "Rolling, unknown reason"
-                delta_message = ""
-
-                # Currently all adjustments are made on the short side of the condor
-                if position.quantity < 0:
-                    # Check the delta of the option if the strategy is delta based
-                    if roll_strategy == "delta":
-                        greeks = self.get_greeks(position.asset)
-                        self.roll_current_delta = greeks["delta"]
-
-                    # Check if the option is a call
-                    if position.asset.right == "CALL":
-
-                        if roll_strategy == "delta":
-                            # Check if the delta is above the delta required
-                            if greeks["delta"] > delta_threshold:
-                                roll_call_short = True
-                                roll_reason = f"Rolling for CALL short delta"
-                                delta_message = f"delta: {greeks['delta']}"
-                                break
-                        
-                        if roll_strategy == "short":
-                            call_short_strike_boundary = position.asset.strike - strike_roll_distance
-                            call_strike = position.asset.strike
-                            if underlying_price >= call_short_strike_boundary:
-                                # If it is, we need to roll the option
-                                roll_call_short = True
-                                roll_reason = f"Rolling for distance to CALL short strike"
-                                break
-
-                    # Check if the option is a put
-                    elif position.asset.right == "PUT":
-
-                        if roll_strategy == "delta":
-                            # Check if the delta is above the delta required
-                            if abs(greeks["delta"]) > delta_threshold:
-                                roll_put_short = True
-                                roll_reason = f"Rolling for PUT short delta"
-                                delta_message = f"delta: {greeks['delta']}"
-                                break
-                        
-                        if roll_strategy == "short":
-                            put_short_strike_boundary = position.asset.strike + strike_roll_distance
-                            put_strike = position.asset.strike
-                            if underlying_price <= put_short_strike_boundary:
-                                # If it is, we need to roll the option
-                                roll_put_short = True
-                                roll_reason = f"Rolling for distance to PUT short strike"
-                                break
-        
-        #######################################################################
-        # Check if we need to sell the condor completely or roll one spread
-        #######################################################################
-                        
-        if roll_call_short or roll_put_short:
-            self.roll_count += 1
-            if self.roll_count > maximum_rolls:
+            ########################################################################
+            # Check for maximum loss which will override all other conditions
+            ########################################################################
+                    
+            if max_loss_multiplier != 0 and self.maximum_loss_exceeded(self.initial_maximum_credit, max_loss_multiplier):
                 sell_the_condor = True
                 roll_call_short = False
                 roll_put_short = False
-                current_credit, legs = self.get_current_credit()
-                close_reason = f"{roll_reason}, rolls ({self.roll_count}) exceeded: credit {current_credit} = {legs[0]} + {legs[1]} + {legs[2]} + {legs[3]}"
-
-        ########################################################################
-        # Check for maximum loss which will override all other conditions
-        ########################################################################
-                
-        if max_loss_multiplier != 0 and self.maximum_loss_exceeded(self.initial_maximum_credit, max_loss_multiplier):
-            sell_the_condor = True
-            roll_call_short = False
-            roll_put_short = False
-            current_credit, legs = self.get_current_credit()
-            close_reason = f"Closing for maximum loss: credit {current_credit} = {legs[0]} + {legs[1]} + {legs[2]} + {legs[3]}"
-
-        ########################################################################
-        # Now execute the close and roll conditions
-        ########################################################################
-
-        # First check if we need to sell the condor completely and create a new one
-        if sell_the_condor:
-            
-            # The prior condor was closed because we approach the expiration date.  It is generally dangerous
-            # to leave condors active since the gamma of the options accelerate as we approach the 
-            # expiration date. Another way of saying the above is the pricing of options become more volatile
-            # as we approach the expiration date.  
-
-            self.sell_all()
-
-            # Reset the roll count since we are creating a new condor with both legs
-            self.roll_count = 0
-
-            # Reset the minimum time to hold a condor
-            self.hold_length = 0
-
-            self.add_marker(
-                f"{close_reason}",
-                value=underlying_price,
-                color="red",
-                symbol="triangle-down",
-                detail_text=f"day_to_expiry: {days_to_expiry}<br>underlying_price: {underlying_price}<br>position_strike: {position_strike}"
-            )
-
-            # Sleep for 5 seconds to make sure the order goes through
-            # IMS Only sleep when live, this sleep function will no-opt in a backtest
-            self.sleep(5)
-
-            # Get closest 3rd Friday expiry
-            new_expiry = self.get_next_expiration_date(option_duration, symbol, rounded_underlying_price)
-
-            # break_date = dtime.date(2022, 3, 18)
-            # if new_expiry.year == 2024:
-            #     print("break")
-
-            # Since we close the prior condor and we can open another one with a new expiration date
-            # and strike based on the original parameters.
-            condor_status, call_strike, put_strike, maximum_credit, last_condor_size = self.create_condor(
-                symbol, new_expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, "both", maximum_portfolio_allocation, self.last_condor_size
-            )
-
-            # These values are used for calculating and placing rolls
-            self.initial_maximum_credit = maximum_credit
-            self.last_condor_size = last_condor_size
-
-            # IMS This is just a place holder.  This need to be rethought.
-            self.margin_reserve = distance_of_wings * 100 * quantity_to_trade
-
-            if "Success" in condor_status:
-                self.margin_reserve = distance_of_wings * 100 * quantity_to_trade  # IMS need to update to reduce by credit
-                # Add marker to the chart
-                self.add_marker(
-                    f"New Condor: credit {maximum_credit}",
-                    value=underlying_price,
-                    color="green",
-                    symbol="triangle-up",    
-                    detail_text=f"Date: {dt}<br>Expiration: {new_expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}"
-                )
+                self.max_loss_hit_flag = True
+                self.skipped_days_counter = 0
+                current_credit, legs = self.cost_to_close_position()
+                close_reason = f"Closing for maximum loss: credit {current_credit} = {legs[0]} + {legs[1]} + {legs[2]} + {legs[3]}"
+                # Reset the skipped days counter to restart skipping days
+                self.skipped_days_counter = 0
             else:
+                self.max_loss_hit_flag = False
+                self.skipped_days_counter = 0
+
+            ########################################################################
+            # Now execute the close and roll conditions
+            ########################################################################
+
+            # First check if we need to sell the condor completely and create a new one
+            if sell_the_condor:
+                
+                # The prior condor was closed because we approach the expiration date.  It is generally dangerous
+                # to leave condors active since the gamma of the options accelerate as we approach the 
+                # expiration date. Another way of saying the above is the pricing of options become more volatile
+                # as we approach the expiration date.  
+
+                self.sell_all()
+
+                # Reset the roll count since we are creating a new condor with both legs
+                self.roll_count = 0
+
+                # Reset the minimum time to hold a condor
+                self.hold_length = 0
+
+                self.add_marker(
+                    f"{close_reason}",
+                    value=underlying_price,
+                    color="red",
+                    symbol="triangle-down",
+                    detail_text=f"day_to_expiry: {days_to_expiry}<br>underlying_price: {underlying_price}<br>position_strike: {position_strike}"
+                )
+
+                # Sleep for 5 seconds to make sure the order goes through
+                # IMS Only sleep when live, this sleep function will no-opt in a backtest
+                self.sleep(5)
+
+                # Get closest 3rd Friday expiry
+                new_expiry = self.get_next_expiration_date(option_duration, symbol, rounded_underlying_price)
+
+                # break_date = dtime.date(2022, 3, 18)
+                # if new_expiry.year == 2024:
+                #     print("break")
+
+                # Since we close the prior condor and we can open another one with a new expiration date
+                # and strike based on the original parameters.
+                condor_status, call_strike, put_strike, maximum_credit, last_condor_size = self.create_condor(
+                    symbol, new_expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, "both", maximum_portfolio_allocation, self.last_condor_size
+                )
+
+                # These values are used for calculating and placing rolls
+                self.initial_maximum_credit = maximum_credit
+                self.last_condor_size = last_condor_size
+
+                # IMS This is just a place holder.  This need to be rethought.
+                self.margin_reserve = distance_of_wings * 100 * quantity_to_trade
+
+                if "Success" in condor_status:
+                    self.margin_reserve = distance_of_wings * 100 * quantity_to_trade  # IMS need to update to reduce by credit
+                    # Add marker to the chart
+                    self.add_marker(
+                        f"New Condor: credit {maximum_credit}",
+                        value=underlying_price,
+                        color="green",
+                        symbol="triangle-up",    
+                        detail_text=f"Date: {dt}<br>Expiration: {new_expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}"
+                    )
+                else:
+                    # Add marker to the chart
+                    self.add_marker(
+                        f"New condor creation failed: {condor_status}",
+                        value=underlying_price,
+                        color="blue",
+                        symbol="cross-open-dot",
+                        detail_text=f"Date: {dt}<br>Expiration: {new_expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}"
+                    ) 
+
+            #################################################################################################
+            # The following section will roll one side of the condor if the underlying price approaches the
+            # short strike on that side.  The new short strike will be selected based on the rolled delta
+            # parameter.  We can make this delta smaller to give us more room.  The tradeoff is that we will
+            # get less credit for the condor.  
+            #################################################################################################
+                    
+            elif (roll_call_short or roll_put_short):
+                if int(self.hold_length) < int(minimum_hold_period):
+                    self.add_marker(
+                        f"Short hold period was not exceeded: {self.hold_length}<{minimum_hold_period}",
+                        value=underlying_price,
+                        color="yellow",
+                        symbol="hexagon-open",
+                        detail_text=f"Date: {dt}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}"
+                    )
+                    return
+                
+                roll_message = ""
+                roll_close_status = ""
+                if roll_call_short:
+                    roll_message = f"{roll_reason}, {delta_message} "
+                    side = "call"
+                    roll_close_status = self.close_spread(side)
+                if roll_put_short:
+                    roll_message = f"{roll_reason}, {delta_message} "
+                    side = "put"
+                    roll_close_status = self.close_spread(side)
+                
+                # Reset the hold period counter
+                self.hold_length = 0
+
+                # IMS margin requirement needs to be update to reflect the change in the credit
+                # The basic margin requirement remains the same.  The margin reserve is reduced by the cost of the roll
+                self.margin_reserve = distance_of_wings * 100 * quantity_to_trade  # IMS need to update to reduce by credit
+
+                # Sleep for 5 seconds to make sure the order goes through
+                # IMS This is a noop in backtest mode
+                self.sleep(5)
+
                 # Add marker to the chart
                 self.add_marker(
-                    f"New condor creation failed: {condor_status}",
-                    value=underlying_price,
-                    color="blue",
-                    symbol="cross-open-dot",
-                    detail_text=f"Date: {dt}<br>Expiration: {new_expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}"
-                ) 
-
-        #################################################################################################
-        # The following section will roll one side of the condor if the underlying price approaches the
-        # short strike on that side.  The new short strike will be selected based on the rolled delta
-        # parameter.  We can make this delta smaller to give us more room.  The tradeoff is that we will
-        # get less credit for the condor.  
-        #################################################################################################
-                
-        elif (roll_call_short or roll_put_short):
-            if int(self.hold_length) < int(minimum_hold_period):
-                self.add_marker(
-                    f"Short hold period was not exceeded: {self.hold_length}<{minimum_hold_period}",
+                    f"{roll_message}",
                     value=underlying_price,
                     color="yellow",
-                    symbol="hexagon-open",
-                    detail_text=f"Date: {dt}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}"
-                )
-                return
-            
-            roll_message = ""
-            roll_close_status = ""
-            if roll_call_short:
-                roll_message = f"{roll_reason}, {delta_message} "
-                side = "call"
-                roll_close_status = self.close_spread(side)
-            if roll_put_short:
-                roll_message = f"{roll_reason}, {delta_message} "
-                side = "put"
-                roll_close_status = self.close_spread(side)
-            
-            # Reset the hold period counter
-            self.hold_length = 0
-
-            # IMS margin requirement needs to be update to reflect the change in the credit
-            # The basic margin requirement remains the same.  The margin reserve is reduced by the cost of the roll
-            self.margin_reserve = distance_of_wings * 100 * quantity_to_trade  # IMS need to update to reduce by credit
-
-            # Sleep for 5 seconds to make sure the order goes through
-            # IMS This is a noop in backtest mode
-            self.sleep(5)
-
-            # Add marker to the chart
-            self.add_marker(
-                f"{roll_message}",
-                value=underlying_price,
-                color="yellow",
-                symbol="triangle-down",
-                detail_text=f"day_to_expiry: {days_to_expiry}<br>\
-                    underlying_price: {underlying_price}<br>\
-                    position_strike: {position_strike}<br>\
-                    {roll_close_status}"
-            )
-
-            # Use the original option expiration date when we only roll one side
-            # However, we do use a different delta for the new short strike
-            # By lowering the delta we reduce the risk it will be hit again
-            roll_expiry = original_expiration_date
-
-            # IMS This is an example of how to set a breakpoint for a specific date.
-            # Set the breakpoint on the print statement.
-            # break_date = dtime.date(2022, 3, 18)
-            # if roll_expiry.year == 2024:
-            #     print("break")
-
-            condor_status, call_strike, put_strike, maximum_credit, last_condor_size = self.create_condor(
-                symbol, roll_expiry, strike_step_size, roll_delta_required, quantity_to_trade, distance_of_wings, side, maximum_portfolio_allocation, self.last_condor_size
-            )
-
-            # The maximum_credit is only used when we initiate a new condor, not when we roll
-
-            if "Success" in condor_status:
-                self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
-                # Add marker to the chart
-                self.add_marker(
-                    f"Rolled: {condor_status}",
-                    value=underlying_price,
-                    color="purple",
-                    symbol="triangle-up",    
-                    detail_text=f"Date: {dt}<br>Expiration: {roll_expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}"
+                    symbol="triangle-down",
+                    detail_text=f"day_to_expiry: {days_to_expiry}<br>\
+                        underlying_price: {underlying_price}<br>\
+                        position_strike: {position_strike}<br>\
+                        {roll_close_status}"
                 )
 
-            else:
-                # Add marker to the chart
-                self.add_marker(
-                    f"Roll Failed: {condor_status}",
-                    value=underlying_price,
-                    color="blue",
-                    symbol="asterisk",
-                    detail_text=f"Date: {dt}<br>Expiration: {roll_expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}"
-                )  
- 
+                # Use the original option expiration date when we only roll one side
+                # However, we do use a different delta for the new short strike
+                # By lowering the delta we reduce the risk it will be hit again
+                roll_expiry = original_expiration_date
+
+                # IMS This is an example of how to set a breakpoint for a specific date.
+                # Set the breakpoint on the print statement.
+                # break_date = dtime.date(2022, 3, 18)
+                # if roll_expiry.year == 2024:
+                #     print("break")
+
+                condor_status, call_strike, put_strike, maximum_credit, last_condor_size = self.create_condor(
+                    symbol, roll_expiry, strike_step_size, roll_delta_required, quantity_to_trade, distance_of_wings, side, maximum_portfolio_allocation, self.last_condor_size
+                )
+
+                # The maximum_credit is only used when we initiate a new condor, not when we roll
+
+                if "Success" in condor_status:
+                    self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
+                    # Add marker to the chart
+                    self.add_marker(
+                        f"Rolled: {condor_status}",
+                        value=underlying_price,
+                        color="purple",
+                        symbol="triangle-up",    
+                        detail_text=f"Date: {dt}<br>Expiration: {roll_expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}"
+                    )
+
+                else:
+                    # Add marker to the chart
+                    self.add_marker(
+                        f"Roll Failed: {condor_status}",
+                        value=underlying_price,
+                        color="blue",
+                        symbol="asterisk",
+                        detail_text=f"Date: {dt}<br>Expiration: {roll_expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}"
+                    )  
+    
         return
 
     ##############################################################################################
@@ -907,10 +938,10 @@ class OptionsIronCondorMWT(Strategy):
     
     def maximum_loss_exceeded(self, initial_maximum_credit, max_loss_multiplier):
 
-        current_credit, legs = self.get_current_credit()
+        cost_to_close, legs = self.cost_to_close_position()
         max_loss_allowed = initial_maximum_credit * max_loss_multiplier
     
-        if current_credit < -max_loss_allowed:
+        if cost_to_close > max_loss_allowed:
             return True
         else:
             return False
@@ -918,7 +949,7 @@ class OptionsIronCondorMWT(Strategy):
     # IMS It is not clear that we really need to do this check and there may be a better way
     # to verify market days.
         
-    def get_current_credit(self):
+    def cost_to_close_position(self):
         current_credit = 0
         option_legs = []
         positions = self.get_positions()
@@ -935,11 +966,11 @@ class OptionsIronCondorMWT(Strategy):
                 )
                 last_price = self.get_last_price(asset)
                 if position.quantity >= 0:
-                    current_credit -= last_price
-                    option_legs.append(last_price)
+                    current_credit = last_price
+                    option_legs.append(current_credit)
                 else:
-                    current_credit += last_price
-                    option_legs.append(-last_price)
+                    current_credit -= last_price
+                    option_legs.append(current_credit)
 
                 i =+ 1
         
