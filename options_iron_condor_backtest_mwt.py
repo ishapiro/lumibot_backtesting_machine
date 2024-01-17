@@ -96,6 +96,8 @@ class OptionsIronCondorMWT(Strategy):
         "delta_threshold" : 0.30, # If roll_strategy is delta this is the delta threshold for rolling
         "maximum_portfolio_allocation" : 0.75, # The maximum amount of the portfolio to allocate to this strategy for new condors
         "max_loss_trade_days_to_skip" : 3, # The number of days to skip after a max loss trade
+        "starting_date" : "2020-02-01",
+        "ending_date" : "2020-04-30",
     }
 
     # Default values if run directly instead of from backtest_driver program
@@ -1031,11 +1033,12 @@ class OptionsIronCondorMWT(Strategy):
 # Make sure that the dates selected are supported by you Polygon.io subscription
 
 if __name__ == "__main__":
-        # Backtest this strategy
-        backtesting_start = datetime(2020, 3, 1)
-        backtesting_end = datetime(2020, 12, 31)
 
         trading_fee = TradingFee(flat_fee=0.60)  # IMS account for trading fees and slippage
+
+        # convert strategy_parmeters["starting_date"] to a datetime object
+        backtesting_start = datetime.strptime(OptionsIronCondorMWT.parameters["starting_date"], "%Y-%m-%d") 
+        backtesting_end = datetime.strptime(OptionsIronCondorMWT.parameters["ending_date"], "%Y-%m-%d")
 
         # polygon_has_paid_subscription is set to true to api calls are not throttled
         OptionsIronCondorMWT.backtest(
