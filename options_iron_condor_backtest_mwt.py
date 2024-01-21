@@ -95,8 +95,8 @@ class OptionsIronCondorMWT(Strategy):
         "delta_threshold" : 0.30, # If roll_strategy is delta this is the delta threshold for rolling
         "maximum_portfolio_allocation" : 0.75, # The maximum amount of the portfolio to allocate to this strategy for new condors
         "max_loss_trade_days_to_skip" : 3, # The number of days to skip after a max loss trade
-        "starting_date" : "2020-02-01",
-        "ending_date" : "2020-04-30",
+        "starting_date" : "2022-01-01",
+        "ending_date" : "2022-04-30",
     }
 
     # Default values if run directly instead of from backtest_driver program
@@ -231,7 +231,7 @@ class OptionsIronCondorMWT(Strategy):
                     value=underlying_price,
                     color="green",
                     symbol="triangle-up",    
-                    detail_text=f"Date: {dt}<br>Expiration: {expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}<br>initial credit: {purchase_credit}"
+                    detail_text=f"Date: {dt}<br>Expiration: {expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}<br>credit: {purchase_credit}"
                 )
             else:
                 # Add marker to the chart
@@ -240,7 +240,7 @@ class OptionsIronCondorMWT(Strategy):
                     value=underlying_price,
                     color="blue",
                     symbol="asterisk",
-                    detail_text=f"Date: {dt}<br>Expiration: {expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}<br>initial credit: {purchase_credit}"
+                    detail_text=f"Date: {dt}<br>Expiration: {expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}<br>credit: {purchase_credit}"
                 ) 
 
         else:
@@ -292,7 +292,7 @@ class OptionsIronCondorMWT(Strategy):
                         # We need to buy back the option
                         sell_the_condor = True
                         cost_to_close = self.cost_to_close_position()
-                        close_reason = f"Closing for days before expiration: credit {self.purchase_credit}, close {cost_to_close}"
+                        close_reason = f"Closing for days: credit {self.purchase_credit}, close {cost_to_close}"
                         break
 
                     # Base on the value of roll_strategy, determine if we need to roll on delta or on how close
