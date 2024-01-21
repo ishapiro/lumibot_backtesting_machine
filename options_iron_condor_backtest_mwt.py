@@ -90,11 +90,11 @@ class OptionsIronCondorMWT(Strategy):
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
         "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.5), # Need to add logic to limit trade size based on margin requirements.  Added 20% for safety since I am likely to only allocate 80% of the account.
         "strike_roll_distance" : 1, # How close to the short do we allow the price to move before rolling.
-        "max_loss_multiplier" : 2.0, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
+        "max_loss_multiplier" : 1.0, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
         "roll_strategy" : "short", # short, delta, none # IMS not fully implemented
         "delta_threshold" : 0.30, # If roll_strategy is delta this is the delta threshold for rolling
         "maximum_portfolio_allocation" : 0.75, # The maximum amount of the portfolio to allocate to this strategy for new condors
-        "max_loss_trade_days_to_skip" : 5, # The number of days to skip after a max loss trade
+        "max_loss_trade_days_to_skip" : 10.0, # The number of days to skip after a max loss trade
         "starting_date" : "2022-01-01",
         "ending_date" : "2022-04-30",
     }
