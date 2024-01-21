@@ -316,8 +316,7 @@ class OptionsIronCondorMWT(Strategy):
                                 # Check if the delta is above the delta required
                                 if greeks["delta"] > delta_threshold:
                                     roll_call_short = True
-                                    roll_reason = f"Rolling for CALL short delta"
-                                    delta_message = f"delta: {greeks['delta']}"
+                                    roll_reason = f"Rolling for CALL short delta: {greeks['delta']}"
                                     break
                             
                             if roll_strategy == "short":
@@ -326,7 +325,7 @@ class OptionsIronCondorMWT(Strategy):
                                 if underlying_price >= call_short_strike_boundary:
                                     # If it is, we need to roll the option
                                     roll_call_short = True
-                                    roll_reason = f"Rolling for distance to CALL short strike"
+                                    roll_reason = f"Rolling for distance to CALL short"
                                     break
 
                         # Check if the option is a put
@@ -336,8 +335,7 @@ class OptionsIronCondorMWT(Strategy):
                                 # Check if the delta is above the delta required
                                 if abs(greeks["delta"]) > delta_threshold:
                                     roll_put_short = True
-                                    roll_reason = f"Rolling for PUT short delta"
-                                    delta_message = f"delta: {greeks['delta']}"
+                                    roll_reason = f"Rolling for PUT short delta: {greeks['delta']}"
                                     break
                             
                             if roll_strategy == "short":
@@ -346,7 +344,7 @@ class OptionsIronCondorMWT(Strategy):
                                 if underlying_price <= put_short_strike_boundary:
                                     # If it is, we need to roll the option
                                     roll_put_short = True
-                                    roll_reason = f"Rolling for distance to PUT short strike"
+                                    roll_reason = f"Rolling for distance to PUT short"
                                     break
             
             #######################################################################
