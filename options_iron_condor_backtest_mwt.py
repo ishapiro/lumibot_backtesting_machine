@@ -90,11 +90,11 @@ class OptionsIronCondorMWT(Strategy):
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
         "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.5), # Need to add logic to limit trade size based on margin requirements.  Added 20% for safety since I am likely to only allocate 80% of the account.
         "strike_roll_distance" : 1, # How close to the short do we allow the price to move before rolling.
-        "max_loss_multiplier" : 3.0, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
+        "max_loss_multiplier" : 2.0, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
         "roll_strategy" : "short", # short, delta, none # IMS not fully implemented
         "delta_threshold" : 0.30, # If roll_strategy is delta this is the delta threshold for rolling
         "maximum_portfolio_allocation" : 0.75, # The maximum amount of the portfolio to allocate to this strategy for new condors
-        "max_loss_trade_days_to_skip" : 3, # The number of days to skip after a max loss trade
+        "max_loss_trade_days_to_skip" : 5, # The number of days to skip after a max loss trade
         "starting_date" : "2022-01-01",
         "ending_date" : "2022-04-30",
     }
@@ -410,12 +410,18 @@ class OptionsIronCondorMWT(Strategy):
                 # IMS Only sleep when live, this sleep function will no-opt in a backtest
                 self.sleep(5)
 
+                # Check to see if the close was due to max loss and if it was just return
+                # If the max loss delay is hit, the code at the start of each day will open
+                # a new condor.
+                if self.max_loss_hit_flag:
+                    self.purchase_credit = 0
+                    self.last_condor_size = 0
+                    return
+                
+
                 # Get closest 3rd Friday expiry
                 new_expiry = self.get_next_expiration_date(option_duration, symbol, rounded_underlying_price)
 
-                # break_date = dtime.date(2022, 3, 18)
-                # if new_expiry.year == 2024:
-                #     print("break")
 
                 # Since we close the prior condor and we can open another one with a new expiration date
                 # and strike based on the original parameters.
@@ -430,7 +436,7 @@ class OptionsIronCondorMWT(Strategy):
                 # IMS This is just a place holder.  This need to be rethought.
                 self.margin_reserve = distance_of_wings * 100 * quantity_to_trade
 
-                if "Success" in condor_status:
+                if "Success" in condor_status: 
                     self.margin_reserve = distance_of_wings * 100 * quantity_to_trade  # IMS need to update to reduce by credit
                     # Add marker to the chart
                     self.add_marker(
@@ -1039,6 +1045,8 @@ if __name__ == "__main__":
             benchmark_asset=OptionsIronCondorMWT.parameters["symbol"],
             buy_trading_fees=[trading_fee],
             sell_trading_fees=[trading_fee],
+            show_tearsheet=False,
+            show_plot=False,
             polygon_api_key=POLYGON_CONFIG["API_KEY"],
             polygon_has_paid_subscription=True,
             name=OptionsIronCondorMWT.strategy_name,
