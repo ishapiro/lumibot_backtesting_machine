@@ -34,7 +34,6 @@ Based on: Lumibot Condor Example, modified to incorporate concepts discuss in th
 Options Trading Course.
 
 NOTE: The current version assumes only one condor is open at a time!!!
-NOTE: Maximum margin is not enforced!!!
 
 This parameterized Iron Condor Test is designed to facilitate testing condors across a range of names,
 deltas and expiration dates.
@@ -131,7 +130,7 @@ class OptionsIronCondorMWT(Strategy):
         self.non_existing_expiry_dates = []
 
         # Current Condor Maximum Profit
-        self.initial_maximum_credit = 0
+        self.purchase_credit = 0
 
         # Saved rolled data for debugging
         self.roll_current_delta = 0
@@ -216,23 +215,23 @@ class OptionsIronCondorMWT(Strategy):
             #     print("break")
 
             # Create the initial condor
-            condor_status, call_strike, put_strike, maximum_credit, last_condor_size = self.create_condor(
+            condor_status, call_strike, put_strike, purchase_credit, last_condor_size = self.create_condor(
                 symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, "both", maximum_portfolio_allocation, self.last_condor_size
             )
 
             # Used when calculating and placing rolls
-            self.initial_maximum_credit = maximum_credit
+            self.purchase_credit = purchase_credit
             self.last_condor_size = last_condor_size
 
             if "Success" in condor_status:
                 self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
                 # Add marker to the chart
                 self.add_marker(
-                    f"Created 1st Condor, credit {maximum_credit}",
+                    f"Created 1st Condor, credit {purchase_credit}",
                     value=underlying_price,
                     color="green",
                     symbol="triangle-up",    
-                    detail_text=f"Date: {dt}<br>Expiration: {expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}<br>initial credit: {maximum_credit}"
+                    detail_text=f"Date: {dt}<br>Expiration: {expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}<br>initial credit: {purchase_credit}"
                 )
             else:
                 # Add marker to the chart
@@ -241,10 +240,9 @@ class OptionsIronCondorMWT(Strategy):
                     value=underlying_price,
                     color="blue",
                     symbol="asterisk",
-                    detail_text=f"Date: {dt}<br>Expiration: {expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}<br>initial credit: {maximum_credit}"
+                    detail_text=f"Date: {dt}<br>Expiration: {expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}<br>initial credit: {purchase_credit}"
                 ) 
 
-            
         else:
             #######################################################################
             # End of first iteration or no active condor
@@ -293,8 +291,8 @@ class OptionsIronCondorMWT(Strategy):
                     if days_to_expiry <= days_before_expiry_to_buy_back:
                         # We need to buy back the option
                         sell_the_condor = True
-                        current_credit, legs = self.cost_to_close_position()
-                        close_reason = f"Closing for days before expiration: credit {current_credit} = {legs[0]} + {legs[1]} + {legs[2]} + {legs[3]}"
+                        cost_to_close = self.cost_to_close_position()
+                        close_reason = f"Closing for days before expiration: credit {self.purchase_credit}, close {cost_to_close}"
                         break
 
                     # Base on the value of roll_strategy, determine if we need to roll on delta or on how close
@@ -361,21 +359,21 @@ class OptionsIronCondorMWT(Strategy):
                     sell_the_condor = True
                     roll_call_short = False
                     roll_put_short = False
-                    current_credit, legs = self.cost_to_close_position()
-                    close_reason = f"{roll_reason}, rolls ({self.roll_count}) exceeded: credit {current_credit} = {legs[0]} + {legs[1]} + {legs[2]} + {legs[3]}"
+                    cost_to_close = self.cost_to_close_position()
+                    close_reason = f"{roll_reason}, rolls ({self.roll_count}), credit {self.purchase_credit}, close {cost_to_close} "
 
             ########################################################################
             # Check for maximum loss which will override all other conditions
             ########################################################################
                     
-            if max_loss_multiplier != 0 and self.maximum_loss_exceeded(self.initial_maximum_credit, max_loss_multiplier):
+            if max_loss_multiplier != 0 and self.maximum_loss_exceeded(self.purchase_credit, max_loss_multiplier):
                 sell_the_condor = True
                 roll_call_short = False
                 roll_put_short = False
                 self.max_loss_hit_flag = True
                 self.skipped_days_counter = 0
-                current_credit, legs = self.cost_to_close_position()
-                close_reason = f"Closing for maximum loss: credit {current_credit} = {legs[0]} + {legs[1]} + {legs[2]} + {legs[3]}"
+                cost_to_close = self.cost_to_close_position()
+                close_reason = f"Maximum loss: credit {self.purchase_credit}, close {cost_to_close}"
                 # Reset the skipped days counter to restart skipping days
                 self.skipped_days_counter = 0
             else:
@@ -423,12 +421,12 @@ class OptionsIronCondorMWT(Strategy):
 
                 # Since we close the prior condor and we can open another one with a new expiration date
                 # and strike based on the original parameters.
-                condor_status, call_strike, put_strike, maximum_credit, last_condor_size = self.create_condor(
+                condor_status, call_strike, put_strike, purchase_credit, last_condor_size = self.create_condor(
                     symbol, new_expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, "both", maximum_portfolio_allocation, self.last_condor_size
                 )
 
                 # These values are used for calculating and placing rolls
-                self.initial_maximum_credit = maximum_credit
+                self.purchase_credit = purchase_credit
                 self.last_condor_size = last_condor_size
 
                 # IMS This is just a place holder.  This need to be rethought.
@@ -438,7 +436,7 @@ class OptionsIronCondorMWT(Strategy):
                     self.margin_reserve = distance_of_wings * 100 * quantity_to_trade  # IMS need to update to reduce by credit
                     # Add marker to the chart
                     self.add_marker(
-                        f"New Condor: credit {maximum_credit}",
+                        f"New Condor: credit {purchase_credit}",
                         value=underlying_price,
                         color="green",
                         symbol="triangle-up",    
@@ -517,7 +515,7 @@ class OptionsIronCondorMWT(Strategy):
                 # if roll_expiry.year == 2024:
                 #     print("break")
 
-                condor_status, call_strike, put_strike, maximum_credit, last_condor_size = self.create_condor(
+                condor_status, call_strike, put_strike, purchase_credit, last_condor_size = self.create_condor(
                     symbol, roll_expiry, strike_step_size, roll_delta_required, quantity_to_trade, distance_of_wings, side, maximum_portfolio_allocation, self.last_condor_size
                 )
 
@@ -938,10 +936,10 @@ class OptionsIronCondorMWT(Strategy):
     # IMS This code assumes we only have one condor open at a time.  It loops through and calculates
     # the current credit of the condor.  This is not a good assumption for a more sophisticated strategy.
     
-    def maximum_loss_exceeded(self, initial_maximum_credit, max_loss_multiplier):
+    def maximum_loss_exceeded(self, purchase_credit, max_loss_multiplier):
 
-        cost_to_close, legs = self.cost_to_close_position()
-        max_loss_allowed = initial_maximum_credit * max_loss_multiplier
+        cost_to_close = self.cost_to_close_position()
+        max_loss_allowed = purchase_credit * max_loss_multiplier
     
         if cost_to_close > max_loss_allowed:
             return True
@@ -952,8 +950,7 @@ class OptionsIronCondorMWT(Strategy):
     # to verify market days.
         
     def cost_to_close_position(self):
-        current_credit = 0
-        option_legs = []
+        cost_to_close = 0
         positions = self.get_positions()
         # Loop through and close all of the puts
         for position in positions:
@@ -968,15 +965,11 @@ class OptionsIronCondorMWT(Strategy):
                 )
                 last_price = self.get_last_price(asset)
                 if position.quantity >= 0:
-                    current_credit = last_price
-                    option_legs.append(current_credit)
+                    cost_to_close += -last_price
                 else:
-                    current_credit -= last_price
-                    option_legs.append(current_credit)
-
-                i =+ 1
+                    cost_to_close += last_price
         
-        return round(current_credit,2), option_legs
+        return round(cost_to_close,2)
     
     def search_next_market_date( self, expiry, symbol, rounded_underlying_price):
 
