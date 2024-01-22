@@ -79,7 +79,7 @@ class OptionsIronCondorMWT(Strategy):
     quantity_to_trade = 10 # reference in multiple parameters below, number of contracts
     parameters = {
         "symbol": "SPY",
-        "option_duration": 40,  # How many days until the call option expires when we sell it
+        "option_duration": 45,  # How many days until the call option expires when we sell it
         "strike_step_size": 1,  # IMS Is this the strike spacing of the specific asset, can we get this from Polygon?
         "delta_required": 0.16,  # The delta of the option we want to sell
         "roll_delta_required": 0.16,  # The delta of the option we want to sell when we do a roll
@@ -89,14 +89,14 @@ class OptionsIronCondorMWT(Strategy):
         "minimum_hold_period": 7,  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
         "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.5), # Need to add logic to limit trade size based on margin requirements.  Added 20% for safety since I am likely to only allocate 80% of the account.
-        "strike_roll_distance" : 1, # How close to the short do we allow the price to move before rolling.
+        "strike_roll_distance" : 0.1, # How close to the short do we allow the price to move before rolling.
         "max_loss_multiplier" : 1.0, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
         "roll_strategy" : "short", # short, delta, none # IMS not fully implemented
         "delta_threshold" : 0.30, # If roll_strategy is delta this is the delta threshold for rolling
         "maximum_portfolio_allocation" : 0.75, # The maximum amount of the portfolio to allocate to this strategy for new condors
-        "max_loss_trade_days_to_skip" : 10.0, # The number of days to skip after a max loss trade
-        "starting_date" : "2022-01-01",
-        "ending_date" : "2022-04-30",
+        "max_loss_trade_days_to_skip" : 7.0, # The number of days to skip after a max loss trade
+        "starting_date" : "2021-01-01",
+        "ending_date" : "2023-12-31",
     }
 
     # Default values if run directly instead of from backtest_driver program
