@@ -2,3 +2,6 @@ __pycache__/credentials.cpython-311.pyc
 credentials.py
 logs/
 strategy_logs/
+strategy_configurations/
+
+
