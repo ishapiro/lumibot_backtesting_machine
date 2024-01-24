@@ -28,6 +28,9 @@ Strategies parameters are defined toml files located in the strategy_configurati
 from each strategy run are located in the strategy_logs directory with the same name as the 
 configuration file that produced the log.
 
+**The strategy_configuration directory is not included in the github distribution.   You will need to
+create this manually.**
+
 ```
 symbol = "SPY"
 option_duration = 40  # How many days until the call option expires when we sell it
