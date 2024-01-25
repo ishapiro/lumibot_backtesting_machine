@@ -1,6 +1,19 @@
-# Import the limibot module the directory limibot which is at the same level as the current directory
-import sys
-sys.path.insert(0, "/Users/irvshapiro/drvax-code-local/AAA Lumibot/lumibot")
+# The following parameter determines if we use the pip install Lumibot or the local copy
+
+use_local_lumibot = True
+
+################################################################################
+# Must Be Imported First If Run Locally
+if use_local_lumibot:
+    import os
+    import sys
+
+    myPath = os.path.dirname(os.path.abspath(__file__))
+    myPath = myPath.replace("iron_condor_lumibot_example", "")
+    myPath = myPath + "/lumibot/"
+    sys.path.insert(0, myPath)
+################################################################################
+
 
 from datetime import datetime, timedelta
 import datetime as dtime
@@ -14,6 +27,15 @@ from pprint import pformat
 
 from lumibot.entities import Asset, TradingFee
 from lumibot.strategies.strategy import Strategy
+
+#######################################################################
+# You must manually define a credentials.py file with the following:
+#
+# POLYGON_CONFIG = {
+#     # Put your own Polygon key here:
+#     "API_KEY": "hjkhkjhjkhkjhkjhkjhkjhhk",
+# }
+#######################################################################
 
 # IMS moved all module includes to the top of the code
 from credentials import POLYGON_CONFIG
