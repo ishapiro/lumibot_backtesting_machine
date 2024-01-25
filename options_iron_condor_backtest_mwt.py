@@ -1,3 +1,7 @@
+# Import the limibot module the directory limibot which is at the same level as the current directory
+import sys
+sys.path.insert(0, "/Users/irvshapiro/drvax-code-local/AAA Lumibot/lumibot")
+
 from datetime import datetime, timedelta
 import datetime as dtime
 from decimal import Decimal
