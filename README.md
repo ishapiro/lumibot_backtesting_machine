@@ -22,6 +22,19 @@ options_iron_condor_backtest_mwt.py -- this is the strategy
 option_testing.py -- this is a mini strategy used to test retreiving option pricing
 polygon_test_api.py -- this is a simple test of the polygon API
 
+
+Before running the strategy, you need to create a file credentials.py containing your Poloycom API key. This
+file is at the same level in the directory structure as your strategy file.
+
+```
+POLYGON_CONFIG = {
+    # Put your own Polygon key here:
+    "API_KEY": "hjkhkjhjkhkjhkjhkjhkjhhk",
+}
+```
+
+
+
 ## Strategy Configuration Files
 
 Strategies parameters are defined toml files located in the strategy_configurations directory. The log files
@@ -31,22 +44,28 @@ configuration file that produced the log.
 **The strategy_configuration directory is not included in the github distribution.   You will need to
 create this manually.**
 
+Check options_iron_condor_backtest_mwt.py for a current up to date list of parameters.
+
 ```
 symbol = "SPY"
 option_duration = 40  # How many days until the call option expires when we sell it
 strike_step_size = 1  # IMS Is this the strike spacing of the specific asset can we get this from Poloygon?
-delta_required = 0.15  # The delta of the option we want to sell
-roll_delta_required = 0.15  # The delta of the option we want to sell when we do a roll
+delta_required = 0.16  # The delta of the option we want to sell
+roll_delta_required = 0.16  # The delta of the option we want to sell when we do a roll
 maximum_rolls = 2  # The maximum number of rolls we will do
 days_before_expiry_to_buy_back = 7  # How many days before expiry to buy back the call
 quantity_to_trade = 10  # The number of contracts to trade
 minimum_hold_period = 5  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
-distance_of_wings = 20  # Distance of the longs from the shorts in dollars -- the wings
-margin_call_factor = 1.25  # How much above the margin requirement do we set the budget
+distance_of_wings = 15  # Distance of the longs from the shorts in dollars -- the wings
 strike_roll_distance = 5 # How close to the short do we allow the price to move before rolling.
+trading_fee = 0.60 # Commmision and slipage
+max_loss_multiplier = 2.0 # The maximum loss as a multiple of initial credit, set to 0 to disable
+maximum_portfolio_allocation = 0.75 # The maximum amount of the portfolio to allocate to this strategy for new condors
+max_loss_trade_days_to_skip =  3 # The number of days to skip after a max loss trade
+roll_strategy = "short" # short, delta, none # IMS not fully implemented
+delta_threshold = 0.20 # The delta threshold for rolling
 starting_date = 2020-02-01
 ending_date = 2020-04-30
-trading_fee_percent = 0.07 # Commmision and slipage
 ```
 
 ## See the code for additional information
@@ -79,40 +98,43 @@ I have used MacOS for development with the following setup:
 brew install python@3.11
 ```
 
-Then open up vscode, and from the terminal, create an environment for your development.
+Then open up VS Code, and from the VS Code terminal, create a Python environment and install lumibot.
 
 ```
-python3 -m venv lumibot-env
-source lumibot-env/bin/activate
+Shift-command-P
+Python Create Environment
 ```
 
-Create a new directory at the next level down.  You do not want the env at the same level as the code because this will cause an issue with git.
-
-If you are inside of the code directory, activate the env with:
+From the VS Code terminal:
 
 ```
-../lumibot-env/bin/activate
+pip install lumibot
 ```
 
-Open the new directory in a terminal and run vscode as follows:
+If you want to work on the lumibot framewort you need to clone it from github at the same level as the directory 
+holding "options_iron_condor_backtest_mwt.py".  For example you directory structure will look like this:
 
 ```
-code .   
+.venv
+iron_condor_lumibot_example
+lumibot
 ```
 
-In VSCode, invoke the command prompt with cmd/shift/p and then type Python: Select Interpreter.  Make sure the Python interpreter is set
-to the lumibot env.
-
-The code is extensively commented.
-
-To run, you need to create a file credentials.py containing your Poloycom API key:
+The following code at the top of the iron condor strategy will force the import of the module from the
+local file vs the pip installed file.
 
 ```
-POLYGON_CONFIG = {
-    # Put your own Polygon key here:
-    "API_KEY": "hjkhkjhjkhkjhkjhkjhkjhhk",
-}
-```
+use_local_lumibot = True
 
+# Must Be Imported First If Run Locally
+if use_local_lumibot:
+    import os
+    import sys
+
+    myPath = os.path.dirname(os.path.abspath(__file__))
+    myPath = myPath.replace("iron_condor_lumibot_example", "")
+    myPath = myPath + "/lumibot/"
+    sys.path.insert(0, myPath)
+```
 
 

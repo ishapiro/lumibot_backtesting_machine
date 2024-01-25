@@ -1,5 +1,4 @@
 # The following parameter determines if we use the pip install Lumibot or the local copy
-
 use_local_lumibot = True
 
 ################################################################################
