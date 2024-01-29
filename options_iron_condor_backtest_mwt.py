@@ -1,5 +1,5 @@
 # The following parameter determines if we use the pip install Lumibot or the local copy
-use_local_lumibot = True
+use_local_lumibot = False
 
 ################################################################################
 # Must Be Imported First If Run Locally
@@ -929,39 +929,49 @@ class OptionsIronCondorMWT(Strategy):
     # This code assumes we only have one condor open at a time.  It loops through and closes
     # all the options.  This is not a good assumption for a more sophisticated strategy.
 
-    def close_spread(self, right):
-        # Make sure the right is in upper case because the asset.right is upper case
-        right = right.upper()
-        # Get all the open positions
+    def cost_to_close_position(self, side="both"):
+        cost_to_close = 0
         positions = self.get_positions()
-
-        close_status = "no side to close"
-
-        # Loop through and close all of the calls
+        # Loop through and close all of the puts
         for position in positions:
             # If the position is an option
             if position.asset.asset_type == "option":
-                if position.asset.right == right:
-                    # call_sell_order = self.get_selling_order(position)
-                    asset = Asset(
-                        position.asset.symbol,
-                        asset_type="option",
-                        expiration=position.asset.expiration,
-                        strike=position.asset.strike,
-                        right=position.asset.right,
-                    )
-                     # If this is a short we buy to close if it is long we sell to close                   
-                    if position.quantity < 0:
-                        action = "buy"
+                if side == "both":
+                    last_price = self.get_asset_price(position.asset.symbol,position.asset.expiration,position.asset.strike, position.asset.right)
+                    if position.quantity >= 0:
+                        cost_to_close += -last_price
                     else:
-                        action = "sell"
+                        cost_to_close += last_price
 
-                    call_close_order = self.create_order(asset, abs(position.quantity), action)
+                if side == "put" and position.asset.right == "put":
+                    last_price = self.get_asset_price(position.asset.symbol,position.asset.expiration,position.asset.strike, position.asset.right)
+                    if position.quantity >= 0:
+                        cost_to_close += -last_price
+                    else:
+                        cost_to_close += last_price
 
-                    self.submit_order(call_close_order)
-                        
-        return 
+                if side == "call" and position.asset.right == "call":
+                    last_price = self.get_asset_price(position.asset.symbol,position.asset.expiration,position.asset.strike, position.asset.right)
+                    if position.quantity >= 0:
+                        cost_to_close += -last_price
+                    else:
+                        cost_to_close += last_price
+
+        print (f"**** Cost to close: spread: {side}, cost: {cost_to_close}")
+
+        return round(cost_to_close,2)
     
+    def get_asset_price(self, symbol, expiration, strike, right):
+        asset = Asset(
+            symbol,
+            asset_type="option",
+            expiration=expiration,
+            strike=strike,
+            right=right,
+        )
+        return self.get_last_price(asset)
+
+
     # IMS This code assumes we only have one condor open at a time.  It loops through and calculates
     # the current credit of the condor.  This is not a good assumption for a more sophisticated strategy.
     
