@@ -100,7 +100,7 @@ class OptionsIronCondorMWT(Strategy):
 
     # IMS Replaced with parameters from the driver program. See set_parameters method below
     
-    distance_of_wings = 15 # reference in multiple parameters below, in dollars not strikes
+    distance_of_wings = 10 # reference in multiple parameters below, in dollars not strikes
     quantity_to_trade = 10 # reference in multiple parameters below, number of contracts
     parameters = {
         "symbol": "SPY",
@@ -120,8 +120,8 @@ class OptionsIronCondorMWT(Strategy):
         "delta_threshold" : 0.30, # If roll_strategy is delta this is the delta threshold for rolling
         "maximum_portfolio_allocation" : 0.75, # The maximum amount of the portfolio to allocate to this strategy for new condors
         "max_loss_trade_days_to_skip" : 3.0, # The number of days to skip after a max loss trade
-        "starting_date" : "2020-06-01",
-        "ending_date" : "2020-12-31",
+        "starting_date" : "2021-01-01",
+        "ending_date" : "2021-12-31",
     }
 
     # Default values if run directly instead of from backtest_driver program
@@ -1015,8 +1015,6 @@ class OptionsIronCondorMWT(Strategy):
                         cost_to_close += -last_price
                     else:
                         cost_to_close += last_price
-
-        print (f"**** Cost to close: spread: {side}, cost: {cost_to_close}")
 
         return round(cost_to_close,2)
     
