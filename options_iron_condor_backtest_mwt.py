@@ -252,7 +252,7 @@ class OptionsIronCondorMWT(Strategy):
                 self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
                 # Add marker to the chart
                 self.add_marker(
-                    f"Created 1st Condor, credit {purchase_credit}",
+                    f"Created Condor, credit {purchase_credit}",
                     value=underlying_price,
                     color="green",
                     symbol="triangle-up",    
@@ -521,9 +521,11 @@ class OptionsIronCondorMWT(Strategy):
                 # IMS This is a noop in backtest mode
                 self.sleep(5)
 
+                cost_to_close = self.cost_to_close_position(side=side)
+
                 # Add marker to the chart
                 self.add_marker(
-                    f"{roll_message}",
+                    f"{roll_message}, cost {cost_to_close}",
                     value=underlying_price,
                     color="yellow",
                     symbol="triangle-down",
@@ -554,7 +556,7 @@ class OptionsIronCondorMWT(Strategy):
                     self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
                     # Add marker to the chart
                     self.add_marker(
-                        f"Rolled: {condor_status}",
+                        f"Rolled: {condor_status}, credit {purchase_credit}",
                         value=underlying_price,
                         color="purple",
                         symbol="triangle-up",    
@@ -957,8 +959,6 @@ class OptionsIronCondorMWT(Strategy):
                     else:
                         cost_to_close += last_price
 
-        print (f"**** Cost to close: spread: {side}, cost: {cost_to_close}")
-
         return round(cost_to_close,2)
     
     def get_asset_price(self, symbol, expiration, strike, right):
@@ -988,27 +988,48 @@ class OptionsIronCondorMWT(Strategy):
     # IMS It is not clear that we really need to do this check and there may be a better way
     # to verify market days.
         
-    def cost_to_close_position(self):
+    def cost_to_close_position(self, side="both"):
         cost_to_close = 0
         positions = self.get_positions()
         # Loop through and close all of the puts
         for position in positions:
             # If the position is an option
             if position.asset.asset_type == "option":
-                asset = Asset(
-                    position.asset.symbol,
-                    asset_type="option",
-                    expiration=position.asset.expiration,
-                    strike=position.asset.strike,
-                    right=position.asset.right,
-                )
-                last_price = self.get_last_price(asset)
-                if position.quantity >= 0:
-                    cost_to_close += -last_price
-                else:
-                    cost_to_close += last_price
-        
+                if side == "both":
+                    last_price = self.get_asset_price(position.asset.symbol,position.asset.expiration,position.asset.strike, position.asset.right)
+                    if position.quantity >= 0:
+                        cost_to_close += -last_price
+                    else:
+                        cost_to_close += last_price
+
+                if side == "put" and position.asset.right == "put":
+                    last_price = self.get_asset_price(position.asset.symbol,position.asset.expiration,position.asset.strike, position.asset.right)
+                    if position.quantity >= 0:
+                        cost_to_close += -last_price
+                    else:
+                        cost_to_close += last_price
+
+                if side == "call" and position.asset.right == "call":
+                    last_price = self.get_asset_price(position.asset.symbol,position.asset.expiration,position.asset.strike, position.asset.right)
+                    if position.quantity >= 0:
+                        cost_to_close += -last_price
+                    else:
+                        cost_to_close += last_price
+
+        print (f"**** Cost to close: spread: {side}, cost: {cost_to_close}")
+
         return round(cost_to_close,2)
+    
+    def get_asset_price(self, symbol, expiration, strike, right):
+        asset = Asset(
+            symbol,
+            asset_type="option",
+            expiration=expiration,
+            strike=strike,
+            right=right,
+        )
+        return self.get_last_price(asset)
+
     
     def search_next_market_date( self, expiry, symbol, rounded_underlying_price):
 
