@@ -1,4 +1,4 @@
-# IMS moved all module includes to the top of the code
+# IMS moved all module includes to the top of the codels 
 from credentials import POLYGON_CONFIG
 from datetime import datetime, timedelta
 from lumibot.backtesting import PolygonDataBacktesting
@@ -51,7 +51,7 @@ strategy_parameters = {
 }
 
 # Get a list of all files in the current directory
-files = os.listdir("strategy_configurations/")
+files = os.listdir("iron_condor_lumibot_example/strategy_configurations/")
 
 # Loop through all of the configurations files in the strategy configuration directory
 # Then load the parameters and run the strategy backtest
@@ -63,7 +63,7 @@ for toml_file in files:
         print(f"Strategy file found: {strategy_file}")
 
         # Read parameters from a TOML file
-        strategy_parameters = toml.load(f"strategy_configurations/{strategy_file}")
+        strategy_parameters = toml.load(f"iron_condor_lumibot_example/strategy_configurations/{strategy_file}")
         print()
         print("**************************************************")
         print("Strategy Parameters read from TOML file")
@@ -71,9 +71,7 @@ for toml_file in files:
         print("**************************************************")
         print()
 
-        capital_budget =  strategy_parameters["distance_of_wings"] \
-            * 100 * strategy_parameters["quantity_to_trade"] \
-            * strategy_parameters["margin_call_factor"]
+        capital_budget =  (strategy_parameters["distance_of_wings"] * 100 * strategy_parameters["quantity_to_trade"] * 1.5)
 
         backtesting_start = datetime.combine(strategy_parameters["starting_date"], datetime.min.time())
         backtesting_end = datetime.combine(strategy_parameters["ending_date"], datetime.min.time())

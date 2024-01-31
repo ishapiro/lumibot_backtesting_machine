@@ -119,7 +119,7 @@ class OptionsIronCondorMWT(Strategy):
         "roll_strategy" : "short", # short, delta, none # IMS not fully implemented
         "delta_threshold" : 0.30, # If roll_strategy is delta this is the delta threshold for rolling
         "maximum_portfolio_allocation" : 0.75, # The maximum amount of the portfolio to allocate to this strategy for new condors
-        "max_loss_trade_days_to_skip" : 3.0, # The number of days to skip after a max loss trade
+        "max_loss_trade_days_to_skip" : 10.0, # The number of days to skip after a max loss trade
         "starting_date" : "2021-01-01",
         "ending_date" : "2021-12-31",
     }
