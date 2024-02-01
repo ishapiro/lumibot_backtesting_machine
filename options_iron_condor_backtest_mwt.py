@@ -114,14 +114,15 @@ class OptionsIronCondorMWT(Strategy):
         "minimum_hold_period": 7,  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
         "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.5), # Need to add logic to limit trade size based on margin requirements.  Added 20% for safety since I am likely to only allocate 80% of the account.
-        "strike_roll_distance" : 0.1, # How close to the short do we allow the price to move before rolling.
+        "strike_roll_distance" : -int(distance_of_wings*.25), # How close to the short do we allow the price to move before rolling.
+        # "strike_roll_distance" : 5, # How close to the short do we allow the price to move before rolling.
         "max_loss_multiplier" : 2.0, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
         "roll_strategy" : "short", # short, delta, none # IMS not fully implemented
         "delta_threshold" : 0.30, # If roll_strategy is delta this is the delta threshold for rolling
         "maximum_portfolio_allocation" : 0.75, # The maximum amount of the portfolio to allocate to this strategy for new condors
         "max_loss_trade_days_to_skip" : 10.0, # The number of days to skip after a max loss trade
-        "starting_date" : "2021-01-01",
-        "ending_date" : "2021-12-31",
+        "starting_date" : "2023-01-01",
+        "ending_date" : "2023-12-31",
     }
 
     # Default values if run directly instead of from backtest_driver program
@@ -443,7 +444,6 @@ class OptionsIronCondorMWT(Strategy):
                     self.last_condor_size = 0
                     return
                 
-
                 # Get closest 3rd Friday expiry
                 new_expiry = self.get_next_expiration_date(option_duration, symbol, rounded_underlying_price)
 
@@ -971,6 +971,38 @@ class OptionsIronCondorMWT(Strategy):
         )
         return self.get_last_price(asset)
 
+    def close_spread(self, right):
+        # Make sure the right is in upper case because the asset.right is upper case
+        right = right.upper()
+        # Get all the open positions
+        positions = self.get_positions()
+
+        close_status = "no side to close"
+
+        # Loop through and close all of the calls
+        for position in positions:
+            # If the position is an option
+            if position.asset.asset_type == "option":
+                if position.asset.right == right:
+                    # call_sell_order = self.get_selling_order(position)
+                    asset = Asset(
+                        position.asset.symbol,
+                        asset_type="option",
+                        expiration=position.asset.expiration,
+                        strike=position.asset.strike,
+                        right=position.asset.right,
+                    )
+                     # If this is a short we buy to close if it is long we sell to close                   
+                    if position.quantity < 0:
+                        action = "buy"
+                    else:
+                        action = "sell"
+
+                    call_close_order = self.create_order(asset, abs(position.quantity), action)
+
+                    self.submit_order(call_close_order)
+                        
+        return 
 
     # IMS This code assumes we only have one condor open at a time.  It loops through and calculates
     # the current credit of the condor.  This is not a good assumption for a more sophisticated strategy.
@@ -985,49 +1017,6 @@ class OptionsIronCondorMWT(Strategy):
         else:
             return False
     
-    # IMS It is not clear that we really need to do this check and there may be a better way
-    # to verify market days.
-        
-    def cost_to_close_position(self, side="both"):
-        cost_to_close = 0
-        positions = self.get_positions()
-        # Loop through and close all of the puts
-        for position in positions:
-            # If the position is an option
-            if position.asset.asset_type == "option":
-                if side == "both":
-                    last_price = self.get_asset_price(position.asset.symbol,position.asset.expiration,position.asset.strike, position.asset.right)
-                    if position.quantity >= 0:
-                        cost_to_close += -last_price
-                    else:
-                        cost_to_close += last_price
-
-                if side == "put" and position.asset.right == "put":
-                    last_price = self.get_asset_price(position.asset.symbol,position.asset.expiration,position.asset.strike, position.asset.right)
-                    if position.quantity >= 0:
-                        cost_to_close += -last_price
-                    else:
-                        cost_to_close += last_price
-
-                if side == "call" and position.asset.right == "call":
-                    last_price = self.get_asset_price(position.asset.symbol,position.asset.expiration,position.asset.strike, position.asset.right)
-                    if position.quantity >= 0:
-                        cost_to_close += -last_price
-                    else:
-                        cost_to_close += last_price
-
-        return round(cost_to_close,2)
-    
-    def get_asset_price(self, symbol, expiration, strike, right):
-        asset = Asset(
-            symbol,
-            asset_type="option",
-            expiration=expiration,
-            strike=strike,
-            right=right,
-        )
-        return self.get_last_price(asset)
-
     
     def search_next_market_date( self, expiry, symbol, rounded_underlying_price):
 
