@@ -114,16 +114,16 @@ class OptionsIronCondorMWT(Strategy):
         "minimum_hold_period": 7,  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
         "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.5), # Need to add logic to limit trade size based on margin requirements.  Added 20% for safety since I am likely to only allocate 80% of the account.
-        "strike_roll_distance" : -int(distance_of_wings*0.5), # How close to the short do we allow the price to move before rolling.
-        # "strike_roll_distance" : 5, # How close to the short do we allow the price to move before rolling.
+        # "strike_roll_distance" : -int(distance_of_wings*0.5), # How close to the short do we allow the price to move before rolling.
+        "strike_roll_distance" : -5.0, # How close to the short do we allow the price to move before rolling.
         "max_loss_multiplier" : 0, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
-        "roll_strategy" : "short", # short, delta, none # IMS not fully implemented
+        "roll_strategy" : "delta", # short, delta, none # IMS not fully implemented
         "skip_on_max_rolls" : False, # If true, skip the trade days to skip after the maximum number of rolls is reached
-        "delta_threshold" : 0.30, # If roll_strategy is delta this is the delta threshold for rolling
+        "delta_threshold" : 0.32, # If roll_strategy is delta this is the delta threshold for rolling
         "maximum_portfolio_allocation" : 0.75, # The maximum amount of the portfolio to allocate to this strategy for new condors
         "max_loss_trade_days_to_skip" : 10.0, # The number of days to skip after a max loss trade
-        "starting_date" : "2022-01-01",
-        "ending_date" : "2022-12-31",
+        "starting_date" : "2023-01-01",
+        "ending_date" : "2023-12-31",
     }
 
     # Default values if run directly instead of from backtest_driver program
@@ -342,7 +342,7 @@ class OptionsIronCondorMWT(Strategy):
 
                             if roll_strategy == "delta":
                                 # Check if the delta is above the delta required
-                                if greeks["delta"] > delta_threshold:
+                                if abs(greeks["delta"]) > abs(delta_threshold):
                                     roll_call_short = True
                                     roll_reason = f"Rolling for CALL short delta: {greeks['delta']}"
                                     break
@@ -361,7 +361,7 @@ class OptionsIronCondorMWT(Strategy):
 
                             if roll_strategy == "delta":
                                 # Check if the delta is above the delta required
-                                if abs(greeks["delta"]) > delta_threshold:
+                                if abs(greeks["delta"]) > abs(delta_threshold):
                                     roll_put_short = True
                                     roll_reason = f"Rolling for PUT short delta: {greeks['delta']}"
                                     break
@@ -606,7 +606,7 @@ class OptionsIronCondorMWT(Strategy):
         )
 
         if side != "both":
-            revised_quantity_to_trade = last_condor_size  # default value
+            revised_quantity_to_trade = last_condor_size  # Always use the same size when rolling
 
 
         ################################################################
@@ -798,6 +798,7 @@ class OptionsIronCondorMWT(Strategy):
 
         last_condor_size = revised_quantity_to_trade
         return status_messages[side], call_strike, put_strike, maximum_credit, last_condor_size 
+    
     ############################################
     # Utility functions
     ############################################
