@@ -115,15 +115,15 @@ class OptionsIronCondorMWT(Strategy):
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
         "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.5), # Need to add logic to limit trade size based on margin requirements.  Added 20% for safety since I am likely to only allocate 80% of the account.
         # "strike_roll_distance" : -int(distance_of_wings*0.5), # How close to the short do we allow the price to move before rolling.
-        "strike_roll_distance" : -5.0, # How close to the short do we allow the price to move before rolling.
+        "strike_roll_distance" : -1.0, # How close to the short do we allow the price to move before rolling.
         "max_loss_multiplier" : 0, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
-        "roll_strategy" : "delta", # short, delta, none # IMS not fully implemented
-        "skip_on_max_rolls" : False, # If true, skip the trade days to skip after the maximum number of rolls is reached
+        "roll_strategy" : "short", # short, delta, none # IMS not fully implemented
+        "skip_on_max_rolls" : True, # If true, skip the trade days to skip after the maximum number of rolls is reached
         "delta_threshold" : 0.32, # If roll_strategy is delta this is the delta threshold for rolling
         "maximum_portfolio_allocation" : 0.75, # The maximum amount of the portfolio to allocate to this strategy for new condors
         "max_loss_trade_days_to_skip" : 10.0, # The number of days to skip after a max loss trade
-        "starting_date" : "2023-01-01",
-        "ending_date" : "2023-12-31",
+        "starting_date" : "2020-01-01",
+        "ending_date" : "2020-12-31",
     }
 
     # Default values if run directly instead of from backtest_driver program
@@ -169,9 +169,21 @@ class OptionsIronCondorMWT(Strategy):
         self.skipped_days_counter = 0
 
         # Flag to indicate if we hit a max loss
-        self.max_loss_hit_flag = False
+        self.stay_out_of_market = False
+
+        # Keep track of historical system price so we can use to track momentum
+        self.historical_price = []
+
+        # Flag to indicate if we hit a max move
+        self.max_move_hit_flag = False
+
+        # Flag to indicate if the portfolio has gone negative
+        self.portfolio_blew_up = False
 
     def on_trading_iteration(self):
+        ############################################################################################
+        # The following code is executed at the beginning of each trading iteration
+        ############################################################################################        
         # Get the parameters
         symbol = self.parameters["symbol"]
         option_duration = self.parameters["option_duration"]
@@ -188,7 +200,7 @@ class OptionsIronCondorMWT(Strategy):
         roll_strategy = self.parameters["roll_strategy"]
         delta_threshold = self.parameters["delta_threshold"]
         maximum_portfolio_allocation = self.parameters["maximum_portfolio_allocation"]
-        max_loss_trade_days_to_skip = self.parameters["max_loss_trade_days_to_skip"]
+        days_to_stay_out_of_market = self.parameters["max_loss_trade_days_to_skip"]
         skip_on_max_rolls = self.parameters["skip_on_max_rolls"]
 
         # Get the price of the underlying asset
@@ -204,10 +216,24 @@ class OptionsIronCondorMWT(Strategy):
         # Get the current datetime
         dt = self.get_datetime()
 
+        self.historical_price.append({"price": rounded_underlying_price, "date": dt})
+
+        # If we have a move in the asset of more than 10% this is not a good time to stay in condors
+        # So stay out of the market for a few days
+        if len(self.historical_price) > 2:
+            if (self.historical_price[-1]["price"] * 1.05 < self.historical_price[-2]["price"]) or (self.historical_price[-1]["price"] * 0.95 > self.historical_price[-2]["price"]):
+                self.max_move_hit_flag = True
+            else:
+                self.max_move_hit_flag = False
+
         # Check if we need to skip days after a max loss
         self.skipped_days_counter += 1
-        if self.max_loss_hit_flag and self.skipped_days_counter < max_loss_trade_days_to_skip:
+        if self.stay_out_of_market and self.skipped_days_counter < days_to_stay_out_of_market:
             return
+        else:
+            # Reset the flags and days counter
+            self.stay_out_of_market = False
+            self.skipped_days_counter = 0
         
         ##############################################################################
         # Collect the option positions and see if we have a condor.  If we only
@@ -225,8 +251,17 @@ class OptionsIronCondorMWT(Strategy):
         # This strategy keeps one condor active at a time.  If this is the first trading
         # day or we have no condor active create one and exit.
             
-        if self.first_iteration or no_active_condor:
+        if (self.first_iteration or no_active_condor) and not self.portfolio_blew_up:
+            ############################################################################################
+            # If the cash available is less then the spread wings we do not haev the money to trade
+            ############################################################################################
+            self.portfolio_blew_up = self.check_if_portfolio_blew_up(distance_of_wings, self.get_cash())
+            if self.portfolio_blew_up:
+                return
+
+            ############################################################################################
             # Output the parameters of the strategy to the indicator file
+            ############################################################################################
             self.add_marker(
                     f"Parameters used in this model",
                     value=underlying_price+30,
@@ -387,27 +422,35 @@ class OptionsIronCondorMWT(Strategy):
                     roll_put_short = False
                     cost_to_close = self.cost_to_close_position()
                     close_reason = f"{roll_reason}, rolls ({self.roll_count}), credit {self.purchase_credit}, close {cost_to_close} "
-                    if skip_on_max_rolls:
-                        self.skipped_days_counter = 0
-                        self.max_loss_hit_flag = True
 
             ########################################################################
-            # Check for maximum loss which will override all other conditions
+            # Check for max move exit condition are met
+            # These conditions are check at the beginning of the day
             ########################################################################
-                    
+            if self.max_move_hit_flag:
+                # If we have a condor active sell it
+                if len(positions) > 1:
+                    sell_the_condor = True
+                    roll_call_short = False
+                    roll_put_short = False
+                    self.stay_out_of_market = True
+                    self.skipped_days_counter = 0
+                    cost_to_close = self.cost_to_close_position()
+                    close_reason = f"Max move hit: credit {self.purchase_credit}, close {cost_to_close}"
+ 
+            ########################################################################
+            # Check for maximum loss over if do not have a max move exit condition
+            ########################################################################
             if max_loss_multiplier != 0 and self.maximum_loss_exceeded(self.purchase_credit, max_loss_multiplier):
-                sell_the_condor = True
-                roll_call_short = False
-                roll_put_short = False
-                self.max_loss_hit_flag = True
-                self.skipped_days_counter = 0
-                cost_to_close = self.cost_to_close_position()
-                close_reason = f"Maximum loss: credit {self.purchase_credit}, close {cost_to_close}"
-                # Reset the skipped days counter to restart skipping days
-                self.skipped_days_counter = 0
-            else:
-                self.max_loss_hit_flag = False
-                self.skipped_days_counter = 0
+                # If we have a condor active sell it
+                if len(positions) > 1:
+                    sell_the_condor = True
+                    roll_call_short = False
+                    roll_put_short = False
+                    self.stay_out_of_market = True
+                    self.skipped_days_counter = 0
+                    cost_to_close = self.cost_to_close_position()
+                    close_reason = f"Maximum loss: credit {self.purchase_credit}, close {cost_to_close}"
 
             ########################################################################
             # Now execute the close and roll conditions
@@ -441,17 +484,15 @@ class OptionsIronCondorMWT(Strategy):
                 # IMS Only sleep when live, this sleep function will no-opt in a backtest
                 self.sleep(5)
 
-                # Check to see if the close was due to max loss and if it was just return
+                # Check to see if the close was due to max loss, max move and if it was just return
                 # If the max loss delay is hit, the code at the start of each day will open
                 # a new condor.
-                if self.max_loss_hit_flag:
+                if self.stay_out_of_market:
                     self.purchase_credit = 0
-                    self.last_condor_size = 0
                     return
                 
                 # Get closest 3rd Friday expiry
                 new_expiry = self.get_next_expiration_date(option_duration, symbol, rounded_underlying_price)
-
 
                 # Since we close the prior condor and we can open another one with a new expiration date
                 # and strike based on the original parameters.
@@ -605,6 +646,7 @@ class OptionsIronCondorMWT(Strategy):
             round(underlying_price / strike_step_size) * strike_step_size
         )
 
+        revised_quantity_to_trade = quantity_to_trade
         if side != "both":
             revised_quantity_to_trade = last_condor_size  # Always use the same size when rolling
 
@@ -618,12 +660,18 @@ class OptionsIronCondorMWT(Strategy):
 
         if side == "both":
             portfolio_value = self.get_portfolio_value()
+            if portfolio_value < 0:
+                print ("****** invalid portfolio value")
+
             cash_required = distance_of_wings * 100 * quantity_to_trade
             if cash_required > portfolio_value * maximum_portfolio_allocation:
                 # Reduce the size of the trade
                 revised_quantity_to_trade = int((portfolio_value * maximum_portfolio_allocation) / (distance_of_wings * 100))
             else:
                 revised_quantity_to_trade = quantity_to_trade
+
+        if revised_quantity_to_trade <= 0:
+            print ("****** invalid trade size")
 
         ################################################
         # Find the strikes for both the shorts and longs
@@ -764,13 +812,6 @@ class OptionsIronCondorMWT(Strategy):
             put_buy_price = self.get_last_price(put_buy_order.asset)
         maximum_credit = round(call_sell_price - call_buy_price + put_sell_price - put_buy_price,2)
 
-        # IMS Debug check the current credit of the condor
-        # print(f"************ initial_credit: {maximum_credit}\n")
-        # print(f"call_sell_price: {call_sell_price}\n")
-        # print(f"call_buy_price: {call_buy_price}\n")
-        # print(f"put_sell_price: {put_sell_price}\n")
-        # print(f"put_buy_price: {put_buy_price}\n")
-        # print ("************\n")
       
         ############################################
         # Return an appropriate status
@@ -802,6 +843,18 @@ class OptionsIronCondorMWT(Strategy):
     ############################################
     # Utility functions
     ############################################
+
+    def check_if_portfolio_blew_up(self, distance_of_wings, cash):
+        if cash < distance_of_wings * 100:
+            self.add_marker(
+                f"Portfolio Blew Up",
+                value=0,
+                color="red",
+                symbol="square",
+                detail_text=f"Date: {self.get_datetime()}<br>Cash available: {cash}"
+            )
+            return True
+        return False
 
     def get_put_orders(
         self, symbol, expiry, strike_step_size, put_strike, quantity_to_trade, distance_of_wings
@@ -856,7 +909,9 @@ class OptionsIronCondorMWT(Strategy):
         # Get the price of the call option
         call_sell_price = self.get_last_price(call_sell_asset)
 
-        # Create the order
+        if quantity_to_trade <= 0:
+            print(f"invalid quality to trade: {quantity_to_trade}\n")
+
         call_sell_order = self.create_order(call_sell_asset, quantity_to_trade, "sell")
 
         # Buy the call option above the call strike
