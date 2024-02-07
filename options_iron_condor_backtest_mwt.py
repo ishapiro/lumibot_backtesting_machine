@@ -113,17 +113,17 @@ class OptionsIronCondorMWT(Strategy):
         "quantity_to_trade": quantity_to_trade,  # The number of contracts to trade
         "minimum_hold_period": 7,  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
-        "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.5), # Need to add logic to limit trade size based on margin requirements.  Added 20% for safety since I am likely to only allocate 80% of the account.
-        # "strike_roll_distance" : -int(distance_of_wings*0.5), # How close to the short do we allow the price to move before rolling.
-        "strike_roll_distance" : -1.0, # How close to the short do we allow the price to move before rolling.
+        "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.5), # 
+        "strike_roll_distance" : 0.1, # How close to the short do we allow the price to move before rolling.
         "max_loss_multiplier" : 0, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
         "roll_strategy" : "short", # short, delta, none # IMS not fully implemented
         "skip_on_max_rolls" : True, # If true, skip the trade days to skip after the maximum number of rolls is reached
         "delta_threshold" : 0.32, # If roll_strategy is delta this is the delta threshold for rolling
         "maximum_portfolio_allocation" : 0.75, # The maximum amount of the portfolio to allocate to this strategy for new condors
-        "max_loss_trade_days_to_skip" : 10.0, # The number of days to skip after a max loss trade
-        "starting_date" : "2020-01-01",
-        "ending_date" : "2020-12-31",
+        "max_loss_trade_days_to_skip" : 5.0, # The number of days to skip after a max loss, rolls exceeded or undelying price move
+        "max_symbol_volitility" : 0.035, # Percent of max move to stay out of the market as a decimal
+        "starting_date" : "2023-01-01",
+        "ending_date" : "2023-12-31",
     }
 
     # Default values if run directly instead of from backtest_driver program
@@ -202,7 +202,8 @@ class OptionsIronCondorMWT(Strategy):
         maximum_portfolio_allocation = self.parameters["maximum_portfolio_allocation"]
         days_to_stay_out_of_market = self.parameters["max_loss_trade_days_to_skip"]
         skip_on_max_rolls = self.parameters["skip_on_max_rolls"]
-
+        max_symbol_volitility  = self.parameters["max_symbol_volitility"]
+        
         # Get the price of the underlying asset
         underlying_price = self.get_last_price(symbol)
         rounded_underlying_price = round(underlying_price, 0)
@@ -218,11 +219,15 @@ class OptionsIronCondorMWT(Strategy):
 
         self.historical_price.append({"price": rounded_underlying_price, "date": dt})
 
-        # If we have a move in the asset of more than 10% this is not a good time to stay in condors
+        # If we have a move in the asset of more than x% we need to stay out of the market
         # So stay out of the market for a few days
+        # Each time this is hit we will roll the days to stay out of the market forward
         if len(self.historical_price) > 2:
-            if (self.historical_price[-1]["price"] * 1.05 < self.historical_price[-2]["price"]) or (self.historical_price[-1]["price"] * 0.95 > self.historical_price[-2]["price"]):
+            if (self.historical_price[-1]["price"] * (1+max_symbol_volitility) < self.historical_price[-2]["price"]) or (self.historical_price[-1]["price"] * (1-max_symbol_volitility) > self.historical_price[-2]["price"]):
                 self.max_move_hit_flag = True
+                # Resetting the days counter will extend the time out of the market
+                # This apply to any reason we are out of the market
+                self.skipped_days_counter = 0
             else:
                 self.max_move_hit_flag = False
 
@@ -422,6 +427,9 @@ class OptionsIronCondorMWT(Strategy):
                     roll_put_short = False
                     cost_to_close = self.cost_to_close_position()
                     close_reason = f"{roll_reason}, rolls ({self.roll_count}), credit {self.purchase_credit}, close {cost_to_close} "
+                    if skip_on_max_rolls:
+                        self.stay_out_of_market = True
+                        self.skipped_days_counter = 0
 
             ########################################################################
             # Check for max move exit condition are met
@@ -437,6 +445,7 @@ class OptionsIronCondorMWT(Strategy):
                     self.skipped_days_counter = 0
                     cost_to_close = self.cost_to_close_position()
                     close_reason = f"Max move hit: credit {self.purchase_credit}, close {cost_to_close}"
+
  
             ########################################################################
             # Check for maximum loss over if do not have a max move exit condition
