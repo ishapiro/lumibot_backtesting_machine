@@ -1,6 +1,6 @@
 Lumibot Iron Condor Benchmarking Experiment
 
-**THIS FRAMEWORK IS NOT READY FOR USE AND SHOULD BE CONSIDERED AN ALPHA RELEASE**
+**THIS FRAMEWORK IS AN EDUCATIONAL EXERCISE**
 
 **DO NOT TRADE BASED ON THE RESULTS OF THIS FRAMEWORK**
 
@@ -15,6 +15,27 @@ By accessing and utilizing the information presented, you acknowledge that you a
 License: MIT License:
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+## Background
+
+This Lumibot strategy employs a parameter-driven back tester for Iron Condors. Iron Condors are option trades that involve two spreads centered on the current market price. Each spread consists of a short and a long position (the wing) on both the put and call sides, which limit risks and define the maximum profit. This exercise aims to determine if a universal set of rules can be applied to most market conditions to maximize returns while minimizing risks.
+
+The parameters at the top of the strategy or loaded from TOML files control the condor's initial structure and the adjustments made as the market changes.  The adjustments available include rolling spreads and closing the condor based on time, delta, asset price, and underlying asset volatility.
+
+Here is the structure of an Iron Condor:
+
+    Iron Condor Structure
+    
+    call log position
+    call short position
+    call short_strike_boundary
+    
+    Initial Stock Position
+    
+    put short_strike_boundary
+    put short position
+    put long posittion
+
 
 ## Files
 
@@ -32,8 +53,6 @@ POLYGON_CONFIG = {
     "API_KEY": "hjkhkjhjkhkjhkjhkjhkjhhk",
 }
 ```
-
-
 
 ## Strategy Configuration Files
 
@@ -71,24 +90,6 @@ ending_date = 2020-04-30
 ## See the code for additional information
 
 The code is extensively commented.  I recommend reviewing the code before attempting to run it.
-
-## Background
-
-    Iron Condor Structure
-    
-    call log position
-    call short position
-    call short_strike_boundary
-    
-    Initial Stock Position
-    
-    put short_strike_boundary
-    put short position
-    put long posittion
-
-
-The goal of the effort is to create a flexible Iron Condor backtesting solution easily modified by updating
-parameters.   In future efforts these parameters will be exposed via web front end.
 
 ## Development
 
