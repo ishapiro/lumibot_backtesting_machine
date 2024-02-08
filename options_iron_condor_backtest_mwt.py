@@ -111,10 +111,10 @@ class OptionsIronCondorMWT(Strategy):
         "maximum_rolls": 2,  # The maximum number of rolls we will do
         "days_before_expiry_to_buy_back": 7,  # How many days before expiry to buy back the call
         "quantity_to_trade": quantity_to_trade,  # The number of contracts to trade
-        "minimum_hold_period": 7,  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
+        "minimum_hold_period": 10,  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
         "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.5), # 
-        "strike_roll_distance" : 0.1, # How close to the short do we allow the price to move before rolling.
+        "strike_roll_distance" : 5, # How close to the short do we allow the price to move before rolling.
         "max_loss_multiplier" : 0, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
         "roll_strategy" : "short", # short, delta, none # IMS not fully implemented
         "skip_on_max_rolls" : True, # If true, skip the trade days to skip after the maximum number of rolls is reached
