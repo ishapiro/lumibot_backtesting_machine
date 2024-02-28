@@ -99,12 +99,12 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 class OptionsIronCondorMWT(Strategy):
 
     # IMS Replaced with parameters from the driver program. See set_parameters method below
-    # Symbols testing: GLD, SPY, QQQ, IWM
+    # Symbols testing: GLD, SPY, QQQ, IWM  -- check the strike step size depending on the ETF
     
     distance_of_wings = 10 # reference in multiple parameters below, in dollars not strikes
     quantity_to_trade = 10 # reference in multiple parameters below, number of contracts
     parameters = {
-        "symbol": "SPY",
+        "symbol": "QQQ",
         "option_duration": 40,  # How many days until the call option expires when we sell it
         "strike_step_size": 1,  # IMS Is this the strike spacing of the specific asset, can we get this from Polygon?
         "delta_required": 0.16,  # The delta of the option we want to sell
@@ -115,7 +115,7 @@ class OptionsIronCondorMWT(Strategy):
         "minimum_hold_period": 7,  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
         "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.5), # 
-        "strike_roll_distance" : 5.0, # How close to the short do we allow the price to move before rolling.
+        "strike_roll_distance" : -1.0, # How close to the short do we allow the price to move before rolling.
         "max_loss_multiplier" : 0, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
         "roll_strategy" : "short", # short, delta, none # IMS not fully implemented
         "skip_on_max_rolls" : True, # If true, skip the trade days to skip after the maximum number of rolls is reached
@@ -123,9 +123,9 @@ class OptionsIronCondorMWT(Strategy):
         "maximum_portfolio_allocation" : 0.75, # The maximum amount of the portfolio to allocate to this strategy for new condors
         "max_loss_trade_days_to_skip" : 5.0, # The number of days to skip after a max loss, rolls exceeded or undelying price move
         "max_volitility_days_to_skip" : 10.0, # The number of days to skip after a max move
-        "max_symbol_volitility" : 0.10, # Percent of max move to stay out of the market as a decimal
-        "starting_date" : "2022-01-01",
-        "ending_date" : "2022-12-31",
+        "max_symbol_volitility" : 0.035, # Percent of max move to stay out of the market as a decimal
+        "starting_date" : "2023-01-01",
+        "ending_date" : "2023-12-31",
     }
 
     # Default values if run directly instead of from backtest_driver program
@@ -225,6 +225,8 @@ class OptionsIronCondorMWT(Strategy):
 
         # Get the current datetime
         dt = self.get_datetime()
+
+        print (f"************************* Date: {dt} Underlying: {rounded_underlying_price} *************************")
 
         self.historical_price.append({"price": rounded_underlying_price, "date": dt})
 
@@ -724,7 +726,7 @@ class OptionsIronCondorMWT(Strategy):
         # If we didn't find a call strike set an error message
         if call_strike is None and (side == "call" or side =="both"):
             status = "no call strike found"
-            return status, call_strike, put_strike
+            return status, 0, 0, 0, 0
 
         # Only keep the strikes below the underlying price for puts
         put_strikes = [strike for strike in strikes if strike < underlying_price]
@@ -744,7 +746,7 @@ class OptionsIronCondorMWT(Strategy):
         # If we didn't find a  put strike set an error message
         if put_strike is None and (side == "put" or side =="both"):
             status = "no put strike found"
-            return status, call_strike, put_strike
+            return status, 0, 0, 0, 0
 
         ###################################################################################
         # Attempt to find the orders (combination of strike, and expiration)
@@ -848,11 +850,11 @@ class OptionsIronCondorMWT(Strategy):
              call_buy_order is None or \
              put_sell_order is None or \
              put_buy_order is None):
-            return "failed to place condor", call_strike, put_strike
+            return "failed to place condor", call_strike, put_strike, 0, 0
         elif side == "call" and (call_sell_order is None or call_buy_order is None):
-            return "failed to roll call side", call_strike, put_strike
+            return "failed to roll call side", call_strike, put_strike, 0, 0
         elif side == "put" and (put_sell_order is None or put_buy_order is None):
-            return "failed to roll put side", call_strike, put_strike
+            return "failed to roll put side", call_strike, put_strike, 0, 0
         else:
             status_messages = {
                 "call": "Success: rolled the call side",
