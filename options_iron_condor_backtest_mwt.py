@@ -104,9 +104,9 @@ class OptionsIronCondorMWT(Strategy):
     distance_of_wings = 10 # reference in multiple parameters below, in dollars not strikes
     quantity_to_trade = 10 # reference in multiple parameters below, number of contracts
     parameters = {
-        "symbol": "QQQ",
+        "symbol": "SPY",
         "option_duration": 40,  # How many days until the call option expires when we sell it
-        "strike_step_size": 1,  # IMS Is this the strike spacing of the specific asset, can we get this from Polygon?
+        "strike_step_size": 5,  # IMS Is this the strike spacing of the specific asset, can we get this from Polygon?
         "delta_required": 0.16,  # The delta of the option we want to sell
         "roll_delta_required": 0.16,  # The delta of the option we want to sell when we do a roll
         "maximum_rolls": 2,  # The maximum number of rolls we will do
@@ -1173,8 +1173,10 @@ if __name__ == "__main__":
             benchmark_asset=OptionsIronCondorMWT.parameters["symbol"],
             buy_trading_fees=[trading_fee],
             sell_trading_fees=[trading_fee],
-            show_plot=True,
-            show_tearsheet=True,
+            show_plot=False,
+            show_tearsheet=False,
+            save_tearsheet=True,
+            show_indicators=False,            
             polygon_api_key=POLYGON_CONFIG["API_KEY"],
             polygon_has_paid_subscription=True,
             name=OptionsIronCondorMWT.strategy_name,
