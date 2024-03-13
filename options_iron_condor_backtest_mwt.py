@@ -104,9 +104,10 @@ class OptionsIronCondorMWT(Strategy):
     distance_of_wings = 10 # reference in multiple parameters below, in dollars not strikes
     quantity_to_trade = 10 # reference in multiple parameters below, number of contracts
     parameters = {
-        "symbol": "SPY",
+        "symbol": "AMZN",
         "option_duration": 40,  # How many days until the call option expires when we sell it
         "strike_step_size": 5,  # IMS Is this the strike spacing of the specific asset, can we get this from Polygon?
+        "max_strikes" : 20,  # This needs to be appropriate for the name and the strike size
         "delta_required": 0.16,  # The delta of the option we want to sell
         "roll_delta_required": 0.16,  # The delta of the option we want to sell when we do a roll
         "maximum_rolls": 2,  # The maximum number of rolls we will do
@@ -206,8 +207,8 @@ class OptionsIronCondorMWT(Strategy):
         skip_on_max_rolls = self.parameters["skip_on_max_rolls"]
         max_symbol_volitility  = self.parameters["max_symbol_volitility"]
         max_volitility_days_to_skip = self.parameters["max_volitility_days_to_skip"]
+        max_strikes = self.parameters["max_strikes"]
 
-                        #
         # Days to skip is different for max move and max loss
         # Days to skip for max rolls uses the max loss days to skip
         # This value is update when a skip condition is hit
@@ -299,7 +300,7 @@ class OptionsIronCondorMWT(Strategy):
 
             # Create the initial condor
             condor_status, call_strike, put_strike, purchase_credit, last_condor_size = self.create_condor(
-                symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, "both", maximum_portfolio_allocation, self.last_condor_size
+                symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, "both", maximum_portfolio_allocation, self.last_condor_size, max_strikes
             )
 
             # Used when calculating and placing rolls
@@ -521,7 +522,7 @@ class OptionsIronCondorMWT(Strategy):
                 # Since we close the prior condor and we can open another one with a new expiration date
                 # and strike based on the original parameters.
                 condor_status, call_strike, put_strike, purchase_credit, last_condor_size = self.create_condor(
-                    symbol, new_expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, "both", maximum_portfolio_allocation, self.last_condor_size
+                    symbol, new_expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, "both", maximum_portfolio_allocation, self.last_condor_size, max_strikes
                 )
 
                 # These values are used for calculating and placing rolls
@@ -617,7 +618,7 @@ class OptionsIronCondorMWT(Strategy):
                 #     print("break")
 
                 condor_status, call_strike, put_strike, purchase_credit, last_condor_size = self.create_condor(
-                    symbol, roll_expiry, strike_step_size, roll_delta_required, quantity_to_trade, distance_of_wings, side, maximum_portfolio_allocation, self.last_condor_size
+                    symbol, roll_expiry, strike_step_size, roll_delta_required, quantity_to_trade, distance_of_wings, side, maximum_portfolio_allocation, self.last_condor_size, max_strikes
                 )
 
                 # The maximum_credit is only used when we initiate a new condor, not when we roll
@@ -651,7 +652,7 @@ class OptionsIronCondorMWT(Strategy):
     ##############################################################################################
 
     def create_condor(
-        self, symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, side, maximum_portfolio_allocation, last_condor_size
+        self, symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, side, maximum_portfolio_allocation, last_condor_size, max_strikes
     ):
 
         status = "no condor created"
@@ -704,10 +705,13 @@ class OptionsIronCondorMWT(Strategy):
         # IMS The following code is not very efficient and should be refactored
 
         strikes = [
-            rounded_underlying_price + strike_step_size * i for i in range(0, 100)
-        ] + [rounded_underlying_price - strike_step_size * i for i in range(1, 100)]
+            rounded_underlying_price + strike_step_size * i for i in range(0, max_strikes)
+        ] + [rounded_underlying_price - strike_step_size * i for i in range(1, max_strikes)]
         strikes.sort()  # Sort the strikes
 
+        # IMS Eliminate negative numbers from strikes
+        strikes = [strike for strike in strikes if strike > 0]
+    
         # Only keep the strikes above the underlying price for calls
         call_strikes = [strike for strike in strikes if strike > underlying_price]
         # Sort the strikes in ascending order
@@ -756,10 +760,13 @@ class OptionsIronCondorMWT(Strategy):
         # We use 5 attempts because as we move out of the money, the distance between strikes
         # may increase from 1 to 5
 
+        # IMS only try up to the number of strikes we have in the list
+        # Change to 3 for now in the range(5) was 5
+
         call_strike_adjustment = 0
         put_sell_order, put_buy_order, call_sell_order, call_buy_order = None, None, None, None
         if side == "call" or side == "both":
-            for i in range(5):
+            for i in range(2):
                 call_sell_order, call_buy_order = self.get_call_orders(
                     symbol,
                     expiry,
@@ -780,7 +787,7 @@ class OptionsIronCondorMWT(Strategy):
         if side=="put" or side == "both":
             # Make 5 attempts to create the put side of the condor
             put_strike_adjustment = -call_strike_adjustment
-            for i in range(5):
+            for i in range(2):
                 put_sell_order, put_buy_order = self.get_put_orders(
                     symbol,
                     expiry,
@@ -1173,10 +1180,9 @@ if __name__ == "__main__":
             benchmark_asset=OptionsIronCondorMWT.parameters["symbol"],
             buy_trading_fees=[trading_fee],
             sell_trading_fees=[trading_fee],
-            show_plot=False,
-            show_tearsheet=False,
-            save_tearsheet=True,
-            show_indicators=False,            
+            show_plot=True,
+            show_tearsheet=True,
+            show_indicators=True,            
             polygon_api_key=POLYGON_CONFIG["API_KEY"],
             polygon_has_paid_subscription=True,
             name=OptionsIronCondorMWT.strategy_name,
