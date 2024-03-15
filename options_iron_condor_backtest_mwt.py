@@ -107,7 +107,7 @@ class OptionsIronCondorMWT(Strategy):
     quantity_to_trade = 10 # reference in multiple parameters below, number of contracts
     parameters = {
         "symbol": "IBM",
-        "option_duration": 45,  # How many days until the call option expires when we sell it
+        "option_duration": 40,  # How many days until the call option expires when we sell it
         "strike_step_size": 5,  # IMS Is this the strike spacing of the specific asset, can we get this from Polygon?
         "max_strikes" : 25,  # This needs to be appropriate for the name and the strike size
         "call_delta_required": 0.16, 
@@ -119,16 +119,16 @@ class OptionsIronCondorMWT(Strategy):
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
         "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.5), # 
         "strike_roll_distance" : 1.0, # How close to the short do we allow the price to move before rolling.
-        "max_loss_multiplier" : 0, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
+        "max_loss_multiplier" : .75, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
         "roll_strategy" : "short", # short, delta, none # IMS not fully implemented
         "skip_on_max_rolls" : True, # If true, skip the trade days to skip after the maximum number of rolls is reached
         "delta_threshold" : 0.32, # If roll_strategy is delta this is the delta threshold for rolling
         "maximum_portfolio_allocation" : 0.75, # The maximum amount of the portfolio to allocate to this strategy for new condors
         "max_loss_trade_days_to_skip" : 5.0, # The number of days to skip after a max loss, rolls exceeded or undelying price move
         "max_volitility_days_to_skip" : 10.0, # The number of days to skip after a max move
-        "max_symbol_volitility" : 0.02, # Percent of max move to stay out of the market as a decimal
+        "max_symbol_volitility" : 0.035, # Percent of max move to stay out of the market as a decimal
         "starting_date" : "2023-01-01",
-        "ending_date" : "2023-12-31",
+        "ending_date" : "2023-04-30",
     }
 
     # Default values if run directly instead of from backtest_driver program
@@ -141,7 +141,7 @@ class OptionsIronCondorMWT(Strategy):
     #
     margin_reserve = 0
 
-    strategy_name = f'ic-{parameters["symbol"]}-{parameters["call_delta_required"]}-{parameters["put_delta_required"]}delta-{parameters["option_duration"]}duration-{parameters["days_before_expiry_to_buy_back"]}exit-{parameters["minimum_hold_period"]}hold'
+    strategy_name = f'ic-{parameters["symbol"]}-{parameters["call_delta_required"]}|{parameters["put_delta_required"]}delta-{parameters["option_duration"]}dte-{parameters["days_before_expiry_to_buy_back"]}exit-{parameters["minimum_hold_period"]}hold'
 
     @classmethod
     def set_parameters(cls, parameters):
@@ -178,6 +178,10 @@ class OptionsIronCondorMWT(Strategy):
 
         # Keep track of historical system price so we can use to track momentum
         self.historical_price = []
+
+        # Keep track of selecive greeks for the current option
+        self.call_vega = []
+        self.put_vega = []
 
         # Flag to indicate if we hit a max move
         self.max_move_hit_flag = False
@@ -227,7 +231,7 @@ class OptionsIronCondorMWT(Strategy):
         underlying_price = self.get_last_price(symbol)
         rounded_underlying_price = round(underlying_price, 0)
 
-        # Add lines to the chart
+        # Add lines to the indicator chart
         self.add_line(f"{symbol}_price", underlying_price)
 
         # IMS this only works because the strategy only holds one condor at a time
@@ -282,6 +286,12 @@ class OptionsIronCondorMWT(Strategy):
         # day or we have no condor active create one and exit.
             
         if (self.first_iteration or no_active_condor) and not self.portfolio_blew_up:
+            ############################################################################################
+            # Initialize values we track for each condor
+            ############################################################################################
+            self.call_vega = []
+            self.put_vega = []
+
             ############################################################################################
             # If the cash available is less then the spread wings we do not haev the money to trade
             ############################################################################################
@@ -397,9 +407,20 @@ class OptionsIronCondorMWT(Strategy):
 
                     # Currently all adjustments are made on the short side of the condor
                     if position.quantity < 0:
+                        greeks = self.get_greeks(position.asset)
+                        frameinfo = getframeinfo(currentframe()) # Used for debugging
+                        self.debug_print(frameinfo.lineno, f"Delta: {greeks['delta']}, Theta: {greeks['theta']}, Gamma: {greeks['gamma']}, Vega: {greeks['vega']}")
+
+                        # Track the vega for the call and put options
+                        if position.asset.right == "CALL":
+                            self.call_vega.append(greeks["vega"])
+                            self.add_line(f"call_vega", greeks.vega)   
+                        elif position.asset.right == "PUT":
+                            self.put_vega.append(greeks["vega"])
+                            self.add_line(f"put_vega", greeks.vega)  
+
                         # Check the delta of the option if the strategy is delta based
                         if roll_strategy == "delta":
-                            greeks = self.get_greeks(position.asset)
                             self.roll_current_delta = greeks["delta"]
 
                         # Check if the option is a call
@@ -469,7 +490,7 @@ class OptionsIronCondorMWT(Strategy):
                     self.stay_out_of_market = True
                     self.skipped_days_counter = 0
                     cost_to_close = self.cost_to_close_position()
-                    close_reason = f"Max move hit: credit {self.purchase_credit}, close {cost_to_close}"
+                    close_reason = f"Max move hit: credit {self.purchase_credit}, cost to close {cost_to_close}"
 
  
             ########################################################################
@@ -484,7 +505,7 @@ class OptionsIronCondorMWT(Strategy):
                     self.stay_out_of_market = True
                     self.skipped_days_counter = 0
                     cost_to_close = self.cost_to_close_position()
-                    close_reason = f"Maximum loss: credit {self.purchase_credit}, close {cost_to_close}"
+                    close_reason = f"Maximum loss: credit {self.purchase_credit}, cost to close {cost_to_close}"
 
             ########################################################################
             # Now execute the close and roll conditions
@@ -506,10 +527,14 @@ class OptionsIronCondorMWT(Strategy):
                 # Reset the minimum time to hold a condor
                 self.hold_length = 0
 
+                close_color = "red"
+                if "max" in close_reason:
+                    close_color = "purple"
+
                 self.add_marker(
                     f"{close_reason}",
                     value=underlying_price,
-                    color="red",
+                    color=close_color,
                     symbol="triangle-down",
                     detail_text=f"day_to_expiry: {days_to_expiry}<br>underlying_price: {underlying_price}<br>position_strike: {position_strike}"
                 )
