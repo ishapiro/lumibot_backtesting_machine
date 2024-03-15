@@ -103,22 +103,23 @@ class OptionsIronCondorMWT(Strategy):
     # IMS Replaced with parameters from the driver program. See set_parameters method below
     # Symbols testing: GLD, SPY, QQQ, IWM, ARKK  -- check the strike step size depending on the ETF
     
-    distance_of_wings = 10 # reference in multiple parameters below, in dollars not strikes
+    distance_of_wings = 5 # reference in multiple parameters below, in dollars not strikes
     quantity_to_trade = 10 # reference in multiple parameters below, number of contracts
     parameters = {
-        "symbol": "GOOG",
-        "option_duration": 40,  # How many days until the call option expires when we sell it
+        "symbol": "IBM",
+        "option_duration": 45,  # How many days until the call option expires when we sell it
         "strike_step_size": 5,  # IMS Is this the strike spacing of the specific asset, can we get this from Polygon?
-        "max_strikes" : 20,  # This needs to be appropriate for the name and the strike size
+        "max_strikes" : 25,  # This needs to be appropriate for the name and the strike size
         "delta_required": 0.16,  # The delta of the option we want to sell
-        "roll_delta_required": 0.16,  # The delta of the option we want to sell when we do a roll
+        "call_delta_required": 0.12, 
+        "put_delta_required": 0.16,
         "maximum_rolls": 2,  # The maximum number of rolls we will do
         "days_before_expiry_to_buy_back": 7,  # How many days before expiry to buy back the call
         "quantity_to_trade": quantity_to_trade,  # The number of contracts to trade
         "minimum_hold_period": 7,  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
         "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.5), # 
-        "strike_roll_distance" : -1.0, # How close to the short do we allow the price to move before rolling.
+        "strike_roll_distance" : 1.0, # How close to the short do we allow the price to move before rolling.
         "max_loss_multiplier" : 0, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
         "roll_strategy" : "short", # short, delta, none # IMS not fully implemented
         "skip_on_max_rolls" : True, # If true, skip the trade days to skip after the maximum number of rolls is reached
@@ -126,9 +127,9 @@ class OptionsIronCondorMWT(Strategy):
         "maximum_portfolio_allocation" : 0.75, # The maximum amount of the portfolio to allocate to this strategy for new condors
         "max_loss_trade_days_to_skip" : 5.0, # The number of days to skip after a max loss, rolls exceeded or undelying price move
         "max_volitility_days_to_skip" : 10.0, # The number of days to skip after a max move
-        "max_symbol_volitility" : 0.035, # Percent of max move to stay out of the market as a decimal
+        "max_symbol_volitility" : 0.03, # Percent of max move to stay out of the market as a decimal
         "starting_date" : "2023-01-01",
-        "ending_date" : "2023-12-27",
+        "ending_date" : "2023-12-31",
     }
 
     # Default values if run directly instead of from backtest_driver program
@@ -141,7 +142,7 @@ class OptionsIronCondorMWT(Strategy):
     #
     margin_reserve = 0
 
-    strategy_name = f'ic-{parameters["symbol"]}-{parameters["delta_required"]}delta-{parameters["option_duration"]}duration-{parameters["days_before_expiry_to_buy_back"]}exit-{parameters["minimum_hold_period"]}hold'
+    strategy_name = f'ic-{parameters["symbol"]}-{parameters["call_delta_required"]}-{parameters["put_delta_required"]}delta-{parameters["option_duration"]}duration-{parameters["days_before_expiry_to_buy_back"]}exit-{parameters["minimum_hold_period"]}hold'
 
     @classmethod
     def set_parameters(cls, parameters):
@@ -196,8 +197,8 @@ class OptionsIronCondorMWT(Strategy):
         symbol = self.parameters["symbol"]
         option_duration = self.parameters["option_duration"]
         strike_step_size = self.parameters["strike_step_size"]
-        delta_required = self.parameters["delta_required"]
-        roll_delta_required = self.parameters["roll_delta_required"]
+        call_delta_required = self.parameters["call_delta_required"]
+        put_delta_required = self.parameters["put_delta_required"]
         days_before_expiry_to_buy_back = self.parameters["days_before_expiry_to_buy_back"]
         distance_of_wings = self.parameters["distance_of_wings"]
         quantity_to_trade = self.parameters["quantity_to_trade"]
@@ -309,7 +310,7 @@ class OptionsIronCondorMWT(Strategy):
 
             # Create the initial condor
             condor_status, call_strike, put_strike, purchase_credit, last_condor_size, last_call_delta, last_put_delta = self.create_condor(
-                symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, "both", maximum_portfolio_allocation, self.last_condor_size, max_strikes
+                symbol, expiry, strike_step_size, call_delta_required, put_delta_required, quantity_to_trade, distance_of_wings, "both", maximum_portfolio_allocation, self.last_condor_size, max_strikes
             )
 
             # Used when calculating and placing rolls
@@ -531,7 +532,7 @@ class OptionsIronCondorMWT(Strategy):
                 # Since we close the prior condor and we can open another one with a new expiration date
                 # and strike based on the original parameters.
                 condor_status, call_strike, put_strike, purchase_credit, last_condor_size, last_call_delta, last_put_delta = self.create_condor(
-                    symbol, new_expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, "both", maximum_portfolio_allocation, self.last_condor_size, max_strikes
+                    symbol, new_expiry, strike_step_size, call_delta_required, put_delta_required, quantity_to_trade, distance_of_wings, "both", maximum_portfolio_allocation, self.last_condor_size, max_strikes
                 )
 
                 # These values are used for calculating and placing rolls
@@ -627,7 +628,7 @@ class OptionsIronCondorMWT(Strategy):
                 #     print("break")
 
                 condor_status, call_strike, put_strike, purchase_credit, last_condor_size, last_call_delta, last_put_delta = self.create_condor(
-                    symbol, roll_expiry, strike_step_size, roll_delta_required, quantity_to_trade, distance_of_wings, side, maximum_portfolio_allocation, self.last_condor_size, max_strikes
+                    symbol, roll_expiry, strike_step_size, call_delta_required, put_delta_required, quantity_to_trade, distance_of_wings, side, maximum_portfolio_allocation, self.last_condor_size, max_strikes
                 )
 
                 # The maximum_credit is only used when we initiate a new condor, not when we roll
@@ -661,7 +662,7 @@ class OptionsIronCondorMWT(Strategy):
     ##############################################################################################
 
     def create_condor(
-        self, symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, side, maximum_portfolio_allocation, last_condor_size, max_strikes
+        self, symbol, expiry, strike_step_size, call_delta_required, put_delta_required, quantity_to_trade, distance_of_wings, side, maximum_portfolio_allocation, last_condor_size, max_strikes
     ):
 
         status = "no condor created"
@@ -726,13 +727,13 @@ class OptionsIronCondorMWT(Strategy):
         # Sort the strikes in ascending order
         call_strikes.sort()
         call_strike_deltas = self.get_strike_deltas(
-            symbol, expiry, call_strikes, "call", stop_less_than=delta_required
+            symbol, expiry, call_strikes, "call", stop_less_than=call_delta_required
         )
 
         # Find the call option with an appropriate delta and the expiry
         call_strike = None
         for strike, delta in call_strike_deltas.items():
-            if delta is not None and delta <= delta_required:
+            if delta is not None and delta <= call_delta_required:
                 call_strike = strike
                 last_call_delta = delta
                 break
@@ -747,13 +748,13 @@ class OptionsIronCondorMWT(Strategy):
         # Sort the strikes in descending order
         put_strikes.sort(reverse=True)
         put_strike_deltas = self.get_strike_deltas(
-            symbol, expiry, put_strikes, "put", stop_greater_than=-delta_required
+            symbol, expiry, put_strikes, "put", stop_greater_than=-put_delta_required
         )
 
         # Find the put option with a the correct delta and the expiry
         put_strike = None
         for strike, delta in put_strike_deltas.items():
-            if delta is not None and delta >= -delta_required:
+            if delta is not None and delta >= -put_delta_required:
                 put_strike = strike
                 last_put_delta = delta
                 break
