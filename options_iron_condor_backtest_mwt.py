@@ -99,12 +99,12 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 class OptionsIronCondorMWT(Strategy):
 
     # IMS Replaced with parameters from the driver program. See set_parameters method below
-    # Symbols testing: GLD, SPY, QQQ, IWM  -- check the strike step size depending on the ETF
+    # Symbols testing: GLD, SPY, QQQ, IWM, ARKK  -- check the strike step size depending on the ETF
     
     distance_of_wings = 10 # reference in multiple parameters below, in dollars not strikes
     quantity_to_trade = 10 # reference in multiple parameters below, number of contracts
     parameters = {
-        "symbol": "AMZN",
+        "symbol": "SPY",
         "option_duration": 40,  # How many days until the call option expires when we sell it
         "strike_step_size": 5,  # IMS Is this the strike spacing of the specific asset, can we get this from Polygon?
         "max_strikes" : 20,  # This needs to be appropriate for the name and the strike size
@@ -126,7 +126,7 @@ class OptionsIronCondorMWT(Strategy):
         "max_volitility_days_to_skip" : 10.0, # The number of days to skip after a max move
         "max_symbol_volitility" : 0.035, # Percent of max move to stay out of the market as a decimal
         "starting_date" : "2023-01-01",
-        "ending_date" : "2023-12-31",
+        "ending_date" : "2023-12-27",
     }
 
     # Default values if run directly instead of from backtest_driver program
@@ -208,6 +208,10 @@ class OptionsIronCondorMWT(Strategy):
         max_symbol_volitility  = self.parameters["max_symbol_volitility"]
         max_volitility_days_to_skip = self.parameters["max_volitility_days_to_skip"]
         max_strikes = self.parameters["max_strikes"]
+
+        # Used to track delta found when walking options
+        last_call_delta = 0
+        last_put_delta = 0
 
         # Days to skip is different for max move and max loss
         # Days to skip for max rolls uses the max loss days to skip
@@ -299,7 +303,7 @@ class OptionsIronCondorMWT(Strategy):
             #     print("break")
 
             # Create the initial condor
-            condor_status, call_strike, put_strike, purchase_credit, last_condor_size = self.create_condor(
+            condor_status, call_strike, put_strike, purchase_credit, last_condor_size, last_call_delta, last_put_delta = self.create_condor(
                 symbol, expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, "both", maximum_portfolio_allocation, self.last_condor_size, max_strikes
             )
 
@@ -315,7 +319,7 @@ class OptionsIronCondorMWT(Strategy):
                     value=underlying_price,
                     color="green",
                     symbol="triangle-up",    
-                    detail_text=f"Date: {dt}<br>Expiration: {expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}<br>credit: {purchase_credit}"
+                    detail_text=f"Date: {dt}<br>Expiration: {expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}<br>credit: {purchase_credit}, <br>call delta: {last_call_delta}, <br>put delta: {last_put_delta}"
                 )
             else:
                 # Add marker to the chart
@@ -521,7 +525,7 @@ class OptionsIronCondorMWT(Strategy):
 
                 # Since we close the prior condor and we can open another one with a new expiration date
                 # and strike based on the original parameters.
-                condor_status, call_strike, put_strike, purchase_credit, last_condor_size = self.create_condor(
+                condor_status, call_strike, put_strike, purchase_credit, last_condor_size, last_call_delta, last_put_delta = self.create_condor(
                     symbol, new_expiry, strike_step_size, delta_required, quantity_to_trade, distance_of_wings, "both", maximum_portfolio_allocation, self.last_condor_size, max_strikes
                 )
 
@@ -540,7 +544,7 @@ class OptionsIronCondorMWT(Strategy):
                         value=underlying_price,
                         color="green",
                         symbol="triangle-up",    
-                        detail_text=f"Date: {dt}<br>Expiration: {new_expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}"
+                        detail_text=f"Date: {dt}<br>Expiration: {new_expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}, <br>call delta: {last_call_delta}, <br>put delta: {last_put_delta}"
                     )
                 else:
                     # Add marker to the chart
@@ -617,7 +621,7 @@ class OptionsIronCondorMWT(Strategy):
                 # if roll_expiry.year == 2024:
                 #     print("break")
 
-                condor_status, call_strike, put_strike, purchase_credit, last_condor_size = self.create_condor(
+                condor_status, call_strike, put_strike, purchase_credit, last_condor_size, last_call_delta, last_put_delta = self.create_condor(
                     symbol, roll_expiry, strike_step_size, roll_delta_required, quantity_to_trade, distance_of_wings, side, maximum_portfolio_allocation, self.last_condor_size, max_strikes
                 )
 
@@ -725,6 +729,7 @@ class OptionsIronCondorMWT(Strategy):
         for strike, delta in call_strike_deltas.items():
             if delta is not None and delta <= delta_required:
                 call_strike = strike
+                last_call_delta = delta
                 break
 
         # If we didn't find a call strike set an error message
@@ -745,6 +750,7 @@ class OptionsIronCondorMWT(Strategy):
         for strike, delta in put_strike_deltas.items():
             if delta is not None and delta >= -delta_required:
                 put_strike = strike
+                last_put_delta = delta
                 break
 
         # If we didn't find a  put strike set an error message
@@ -766,7 +772,7 @@ class OptionsIronCondorMWT(Strategy):
         call_strike_adjustment = 0
         put_sell_order, put_buy_order, call_sell_order, call_buy_order = None, None, None, None
         if side == "call" or side == "both":
-            for i in range(2):
+            for i in range(5):
                 call_sell_order, call_buy_order = self.get_call_orders(
                     symbol,
                     expiry,
@@ -787,7 +793,7 @@ class OptionsIronCondorMWT(Strategy):
         if side=="put" or side == "both":
             # Make 5 attempts to create the put side of the condor
             put_strike_adjustment = -call_strike_adjustment
-            for i in range(2):
+            for i in range(5):
                 put_sell_order, put_buy_order = self.get_put_orders(
                     symbol,
                     expiry,
@@ -869,7 +875,7 @@ class OptionsIronCondorMWT(Strategy):
                 "both": "Success the Condor" }
 
         last_condor_size = revised_quantity_to_trade
-        return status_messages[side], call_strike, put_strike, maximum_credit, last_condor_size 
+        return status_messages[side], call_strike, put_strike, maximum_credit, last_condor_size, last_call_delta, last_put_delta 
     
     ############################################
     # Utility functions
@@ -1181,8 +1187,7 @@ if __name__ == "__main__":
             buy_trading_fees=[trading_fee],
             sell_trading_fees=[trading_fee],
             show_plot=True,
-            show_tearsheet=True,
-            show_indicators=True,            
+            show_tearsheet=True,          
             polygon_api_key=POLYGON_CONFIG["API_KEY"],
             polygon_has_paid_subscription=True,
             name=OptionsIronCondorMWT.strategy_name,
