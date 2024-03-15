@@ -19,10 +19,12 @@ import datetime as dtime
 from decimal import Decimal
 import time
 
-# IMS pretty print is used for debugging
+# IMS functions used for debugging
 import pprint
 pp = pprint.PrettyPrinter(indent=4)
-from pprint import pformat   
+from pprint import pformat  
+
+from inspect import currentframe, getframeinfo
 
 from lumibot.entities import Asset, TradingFee
 from lumibot.strategies.strategy import Strategy
@@ -104,7 +106,7 @@ class OptionsIronCondorMWT(Strategy):
     distance_of_wings = 10 # reference in multiple parameters below, in dollars not strikes
     quantity_to_trade = 10 # reference in multiple parameters below, number of contracts
     parameters = {
-        "symbol": "SPY",
+        "symbol": "GOOG",
         "option_duration": 40,  # How many days until the call option expires when we sell it
         "strike_step_size": 5,  # IMS Is this the strike spacing of the specific asset, can we get this from Polygon?
         "max_strikes" : 20,  # This needs to be appropriate for the name and the strike size
@@ -184,6 +186,9 @@ class OptionsIronCondorMWT(Strategy):
         self.portfolio_blew_up = False
 
     def on_trading_iteration(self):
+        # Used for debugging
+        frameinfo = getframeinfo(currentframe())
+
         ############################################################################################
         # The following code is executed at the beginning of each trading iteration
         ############################################################################################        
@@ -839,13 +844,18 @@ class OptionsIronCondorMWT(Strategy):
         call_sell_price, call_buy_price, put_sell_price, put_buy_price = 0, 0, 0, 0
         # These will be estimates since we do not have the actual fill prices at this time
         # We cannot use the get_current_credit method since the order is not live yet
+        frameinfo = getframeinfo(currentframe()) # Used for debugging
         if (call_sell_order):
+            self.debug_print (frameinfo.lineno, f"get_last_price {call_sell_order.asset.strike}")
             call_sell_price = self.get_last_price(call_sell_order.asset)
         if (call_buy_order):
+            self.debug_print (frameinfo.lineno, f"get_last_price {call_buy_order.asset.strike}")
             call_buy_price = self.get_last_price(call_buy_order.asset)
         if (put_sell_order):
+            self.debug_print (frameinfo.lineno, f"get_last_price {put_sell_order.asset.strike}")
             put_sell_price = self.get_last_price(put_sell_order.asset)
         if (put_buy_order):
+            self.debug_print (frameinfo.lineno, f"get_last_price {put_buy_order.asset.strike}")
             put_buy_price = self.get_last_price(put_buy_order.asset)
         maximum_credit = round(call_sell_price - call_buy_price + put_sell_price - put_buy_price,2)
 
@@ -880,6 +890,10 @@ class OptionsIronCondorMWT(Strategy):
     ############################################
     # Utility functions
     ############################################
+
+    def debug_print(self, line, msg):
+        print (f"MWT DEBUG: LINE NUMBER: {line} - {msg}")
+        return
 
     def check_if_portfolio_blew_up(self, distance_of_wings, cash):
         if cash < distance_of_wings * 100:
@@ -921,6 +935,8 @@ class OptionsIronCondorMWT(Strategy):
         )
 
         # Get the price of the put option
+        frameinfo = getframeinfo(currentframe()) # Used for debugging
+        self.debug_print (frameinfo.lineno, f"get_last_price {put_buy_asset.strike}")
         put_buy_price = self.get_last_price(put_buy_asset)
 
         # Create the order
@@ -944,6 +960,8 @@ class OptionsIronCondorMWT(Strategy):
         )
 
         # Get the price of the call option
+        frameinfo = getframeinfo(currentframe()) # Used for debugging
+        self.debug_print (frameinfo.lineno, f"get_last_price {call_sell_asset.strike}")
         call_sell_price = self.get_last_price(call_sell_asset)
 
         if quantity_to_trade <= 0:
@@ -962,7 +980,7 @@ class OptionsIronCondorMWT(Strategy):
 
         # Get the price of the call option
         call_buy_price = self.get_last_price(call_buy_asset)
-        print (f"<br>call buy price is {call_buy_price}, strike {call_strike + distance_of_wings}, expiration {expiry} <br>")
+        print (f"MWT DEBUG: call buy price is {call_buy_price}, strike {call_strike + distance_of_wings}, expiration {expiry}")
 
         # Create the order
         call_buy_order = self.create_order(call_buy_asset, quantity_to_trade, "buy")
@@ -994,6 +1012,8 @@ class OptionsIronCondorMWT(Strategy):
             )
 
             # Get the last price for this asset
+            frameinfo = getframeinfo(currentframe()) # Used for debugging
+            self.debug_print (frameinfo.lineno, f"get_last_price {asset.strike}")
             price = self.get_last_price(asset)
 
             if price is not None and price > 0:
@@ -1037,6 +1057,7 @@ class OptionsIronCondorMWT(Strategy):
             # If the position is an option
             if position.asset.asset_type == "option":
                 if side == "both":
+                    print (f"MWT DEBUG: Cost to close position both: {position.asset.strike}")
                     last_price = self.get_asset_price(position.asset.symbol,position.asset.expiration,position.asset.strike, position.asset.right)
                     if position.quantity >= 0:
                         cost_to_close += -last_price
@@ -1044,6 +1065,7 @@ class OptionsIronCondorMWT(Strategy):
                         cost_to_close += last_price
 
                 if side == "put" and position.asset.right == "put":
+                    print (f"MWT DEBUG: Cost to close position put: {position.asset.strike}")
                     last_price = self.get_asset_price(position.asset.symbol,position.asset.expiration,position.asset.strike, position.asset.right)
                     if position.quantity >= 0:
                         cost_to_close += -last_price
@@ -1051,6 +1073,7 @@ class OptionsIronCondorMWT(Strategy):
                         cost_to_close += last_price
 
                 if side == "call" and position.asset.right == "call":
+                    print (f"MWT DEBUG: Cost to close position call: {position.asset.strike}")
                     last_price = self.get_asset_price(position.asset.symbol,position.asset.expiration,position.asset.strike, position.asset.right)
                     if position.quantity >= 0:
                         cost_to_close += -last_price
@@ -1131,16 +1154,19 @@ class OptionsIronCondorMWT(Strategy):
                     continue
 
             # Create the asset
-            asset = Asset(
-                symbol,
-                asset_type="option",
-                expiration=expiry,
-                strike=rounded_underlying_price,
-                right="call",
-            )
+            # IMS This was causing a polygon error when trying to get an option on a non-option strike
+            # asset = Asset(
+            #     symbol,
+            #     asset_type="option",
+            #     expiration=expiry,
+            #     strike=rounded_underlying_price,
+            #     right="call",
+            # )
 
             # Get the price of the option
-            price = self.get_last_price(asset)
+            frameinfo = getframeinfo(currentframe()) # Used for debugging
+            self.debug_print (frameinfo.lineno, f"search_next_market_date: expiry {expiry}, price {rounded_underlying_price}")
+            price = self.get_last_price(symbol)
 
             # If we got the price, then break because this expiry is valid
             if price is not None:
