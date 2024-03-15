@@ -103,15 +103,14 @@ class OptionsIronCondorMWT(Strategy):
     # IMS Replaced with parameters from the driver program. See set_parameters method below
     # Symbols testing: GLD, SPY, QQQ, IWM, ARKK  -- check the strike step size depending on the ETF
     
-    distance_of_wings = 5 # reference in multiple parameters below, in dollars not strikes
+    distance_of_wings = 10 # reference in multiple parameters below, in dollars not strikes
     quantity_to_trade = 10 # reference in multiple parameters below, number of contracts
     parameters = {
         "symbol": "IBM",
         "option_duration": 45,  # How many days until the call option expires when we sell it
         "strike_step_size": 5,  # IMS Is this the strike spacing of the specific asset, can we get this from Polygon?
         "max_strikes" : 25,  # This needs to be appropriate for the name and the strike size
-        "delta_required": 0.16,  # The delta of the option we want to sell
-        "call_delta_required": 0.12, 
+        "call_delta_required": 0.16, 
         "put_delta_required": 0.16,
         "maximum_rolls": 2,  # The maximum number of rolls we will do
         "days_before_expiry_to_buy_back": 7,  # How many days before expiry to buy back the call
@@ -127,7 +126,7 @@ class OptionsIronCondorMWT(Strategy):
         "maximum_portfolio_allocation" : 0.75, # The maximum amount of the portfolio to allocate to this strategy for new condors
         "max_loss_trade_days_to_skip" : 5.0, # The number of days to skip after a max loss, rolls exceeded or undelying price move
         "max_volitility_days_to_skip" : 10.0, # The number of days to skip after a max move
-        "max_symbol_volitility" : 0.03, # Percent of max move to stay out of the market as a decimal
+        "max_symbol_volitility" : 0.02, # Percent of max move to stay out of the market as a decimal
         "starting_date" : "2023-01-01",
         "ending_date" : "2023-12-31",
     }
