@@ -2,7 +2,7 @@
 from credentials import POLYGON_CONFIG
 from datetime import datetime, timedelta
 from lumibot.backtesting import PolygonDataBacktesting
-from options_iron_condor_backtest_mwt import OptionsIronCondorMWT
+from iron_condor_lumibot_example.options_backtesting_machine import OptionsIronCondorMWT
 from lumibot.entities import TradingFee
 import os
 import time
