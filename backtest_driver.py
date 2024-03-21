@@ -2,7 +2,7 @@
 from credentials import POLYGON_CONFIG
 from datetime import datetime, timedelta
 from lumibot.backtesting import PolygonDataBacktesting
-from iron_condor_lumibot_example.options_backtesting_machine import OptionsIronCondorMWT
+from options_backtesting_machine import OptionsStrategyEngine
 from lumibot.entities import TradingFee
 import os
 import time
@@ -35,23 +35,35 @@ By accessing and utilizing the information presented, you acknowledge that you a
 distance_of_wings = 15 # reference in multiple parameters below, in dollars not strikes
 quantity_to_trade = 10 # reference in multiple parameters below, number of contracts
 strategy_parameters = {
-    "symbol": "SPY",
-    "option_duration": 40,  # How many days until the call option expires when we sell it
-    "strike_step_size": 1,  # IMS Is this the strike spacing of the specific asset, can we get this from Poloygon?
-    "delta_required": 0.15,  # The delta of the option we want to sell
-    "roll_delta_required": 0.15,  # The delta of the option we want to sell when we do a roll
-    "maximum_rolls": 2,  # The maximum number of rolls we will do
-    "days_before_expiry_to_buy_back": 7,  # How many days before expiry to buy back the call
-    "quantity_to_trade": quantity_to_trade,  # The number of contracts to trade
-    "minimum_hold_period": 5,  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
-    "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
-    "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.25), # Need to add logic to limit trade size based on margin requirements.
-    "strike_roll_distance" : (0.10 * distance_of_wings), # How close to the short do we allow the price to move before rolling.
-    "trading_fee_percent" : 0.007 # The percent fee charged by the broker for each trade
-}
+        "symbol": "SPY",
+        "trade_strategy" : "iron-condor",  # iron-condor, bull-put-spread, bear-call-spread, hybrid
+        "option_duration": 40,  # How many days until the call option expires when we sell it
+        "strike_step_size": 5,  # IMS Is this the strike spacing of the specific asset, can we get this from Polygon?
+        "max_strikes" : 25,  # This needs to be appropriate for the name and the strike size
+        "call_delta_required": 0.16, # The delta values are different if we are skewing the condor
+        "put_delta_required": 0.16,
+        "maximum_rolls": 2,  # The maximum number of rolls we will do
+        "days_before_expiry_to_buy_back": 7,  # How many days before expiry to buy back the call
+        "quantity_to_trade": quantity_to_trade,  # The number of contracts to trade
+        "minimum_hold_period": 7,  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
+        "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
+        "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.5), # 
+        "strike_roll_distance" : 1.0, # How close to the short do we allow the price to move before rolling.
+        "max_loss_multiplier" : .75, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
+        "roll_strategy" : "short", # short, delta, none # IMS not fully implemented
+        "skip_on_max_rolls" : True, # If true, skip the trade days to skip after the maximum number of rolls is reached
+        "delta_threshold" : 0.32, # If roll_strategy is delta this is the delta threshold for rolling
+        "maximum_portfolio_allocation" : 0.75, # The maximum amount of the portfolio to allocate to this strategy for new condors
+        "max_loss_trade_days_to_skip" : 5.0, # The number of days to skip after a max loss, rolls exceeded or undelying price move
+        "max_volitility_days_to_skip" : 10.0, # The number of days to skip after a max move
+        "max_symbol_volitility" : 0.05, # Percent of max move to stay out of the market as a decimal
+        "starting_date" : "2022-01-01",
+        "ending_date" : "2022-12-31",
+        "trading_fee" : 0.65,  # The trading fee in dollars per contract
+    }
 
 # Get a list of all files in the current directory
-files = os.listdir("iron_condor_lumibot_example/strategy_configurations/")
+files = os.listdir("lumibot_backtesting_machine/strategy_configurations/")
 
 # Loop through all of the configurations files in the strategy configuration directory
 # Then load the parameters and run the strategy backtest
@@ -63,7 +75,7 @@ for toml_file in files:
         print(f"Strategy file found: {strategy_file}")
 
         # Read parameters from a TOML file
-        strategy_parameters = toml.load(f"iron_condor_lumibot_example/strategy_configurations/{strategy_file}")
+        strategy_parameters = toml.load(f"lumibot_backtesting_machine/strategy_configurations/{strategy_file}")
         print()
         print("**************************************************")
         print("Strategy Parameters read from TOML file")
@@ -76,10 +88,10 @@ for toml_file in files:
         backtesting_start = datetime.combine(strategy_parameters["starting_date"], datetime.min.time())
         backtesting_end = datetime.combine(strategy_parameters["ending_date"], datetime.min.time())
 
-        # Override the parameters set in the OptionsIronCondorMWT class
-        OptionsIronCondorMWT.set_parameters(strategy_parameters)
+        # Override the parameters set in the OptionsStrategyEngine class
+        OptionsStrategyEngine.set_parameters(strategy_parameters)
 
-        strategy_name = f'ic-{strategy_parameters["symbol"]}-{strategy_parameters["delta_required"]}delta-{strategy_parameters["option_duration"]}dur-{strategy_parameters["days_before_expiry_to_buy_back"]}ex-{strategy_parameters["minimum_hold_period"]}hd'
+        strategy_name = f'mwt-{strategy_parameters["symbol"]}-{strategy_parameters["trade_strategy"]}'
 
         trading_fee = TradingFee(flat_fee=strategy_parameters["trading_fee"])  # Account for trading fees and slipage
 
@@ -92,7 +104,7 @@ for toml_file in files:
                 os.remove(os.path.join("logs/", file))
 
         # Execute the strategy with the parameters from the TOML file
-        OptionsIronCondorMWT.backtest(
+        OptionsStrategyEngine.backtest(
             PolygonDataBacktesting,
             backtesting_start,
             backtesting_end,

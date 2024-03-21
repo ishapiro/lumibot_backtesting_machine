@@ -1,3 +1,52 @@
+"""
+Lumibot Backtesting Machine
+
+Disclaimer: The options strategies presented within this content are intended for educational purposes only. They are not meant to be used for trading live stocks or any other financial instruments. The information provided is based on historical data and hypothetical scenarios, and it does not guarantee future results or profits.
+
+Trading stocks and options involve substantial risks and may result in the loss of your invested capital. It is essential to conduct thorough research, seek advice from a qualified financial professional, and carefully consider your risk tolerance before engaging in any trading activities.
+
+By accessing and utilizing the information presented, you acknowledge that you are solely responsible for any trading decisions you make. Neither the author nor any associated parties shall be held liable for any losses, damages, or consequences arising from the use of the strategies discussed in this content.
+"""
+
+"""
+Strategy Description
+
+Author: Irv Shapiro (ishapiro@cogitations.com)
+YouTube: MakeWithTech
+Websites: https://www.makewithtech.com, https://cogitations.com
+
+Based on: Loosly based on the Lumibot Condor Example, modified to incorporate concepts discuss in the SMB Capital
+Options Trading Course.  
+
+NOTE: The current version assumes only one trade is open at a time!!!
+
+The bull put spread is a bullish strategy that profits when the underlying asset stays above the short strike.  The bear
+call spread is a bearish strategy that profits when the underlying asset stays below the short strike.  The iron condor
+combines these two strategies to create a market neutral strategy that profits when the underlying asset stays within a
+range.
+
+The Iron Condor is a market neutral strategy that profits when the underlying asset stays within a range.  The strategy
+is constructed by selling a call spread and a put spread.  The call spread is constructed by selling a call option and
+buying a call option with a higher strike price.  The put spread is constructed by selling a put option and buying a put
+option with a lower strike price.  The distance between the short and long strikes is the "wings" of the condor.
+
+This parameterized trade testing application is designed to evaluate a range of parameters for a trade stragegy over a range 
+of parmeters.  The parameters include the delta of the shorts, the distance of the wings, the days before expiration to exit
+the trade, and the days before expiration to roll one of the spreads.  The application also supports setting an option maximum
+loss.  The maximum loss is the initial credit * max_loss_multiplier.  If the maximum loss is exceeded the trade is closed.
+
+The roll logic can be based on delta or distance to the short strike.  The delta threshold is the delta of the
+short strike that will trigger a roll.  The distance to the short strike is the distance in dollars that the
+underlying price must be from the short strike to trigger a roll.
+    
+"""
+
+"""
+License: MIT License:
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+"""
+
 # The following parameter determines if we use the pip install Lumibot or the local copy
 use_local_lumibot = False
 
@@ -46,63 +95,7 @@ from lumibot.strategies.strategy import Strategy
 from credentials import POLYGON_CONFIG
 from lumibot.backtesting import PolygonDataBacktesting
 
-"""
-Disclaimer: The options strategies presented within this content are intended for educational purposes only. They are not meant to be used for trading live stocks or any other financial instruments. The information provided is based on historical data and hypothetical scenarios, and it does not guarantee future results or profits.
-
-Trading stocks and options involve substantial risks and may result in the loss of your invested capital. It is essential to conduct thorough research, seek advice from a qualified financial professional, and carefully consider your risk tolerance before engaging in any trading activities.
-
-By accessing and utilizing the information presented, you acknowledge that you are solely responsible for any trading decisions you make. Neither the author nor any associated parties shall be held liable for any losses, damages, or consequences arising from the use of the strategies discussed in this content.
-"""
-
-"""
-Strategy Description
-
-Author: Irv Shapiro (ishapiro@cogitations.com)
-YouTube: MakeWithTech
-Websites: https://www.makewithtech.com, https://cogitations.com
-
-Based on: Lumibot Condor Example, modified to incorporate concepts discuss in the SMB Capital
-Options Trading Course.
-
-NOTE: The current version assumes only one condor is open at a time!!!
-
-This parameterized Iron Condor Test is designed to facilitate testing condors across a range of names,
-deltas and expiration dates.
-
-An iron condor is a market neutral strategy that profits when the underlying asset stays within a range.
-
-Explanation of Iron Condor Parameters:
-
-    Condor Example
-    
-    call log position
-    call short position
-    
-    Initial Stock Position
-    
-    put short position
-    put long position
-
-The benchmark is designed to evaluate a range of Iron Condor parameters ranging from the delta of the shorts,
-the distance of the wings, the days before expiration to exit the trade, and the days before expiration to roll
-one of the spreads.
-
-It also supports setting an option maximum loss.  The maximum loss is the initial credit * max_loss_multiplier.
-
-The roll logic can be based on delta or distance to the short strike.  The delta threshold is the delta of the
-short strike that will trigger a roll.  The distance to the short strike is the distance in dollars that the
-underlying price must be from the short strike to trigger a roll.
-    
-"""
-
-"""
-License: MIT License:
-
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-"""
-
-
-class OptionsIronCondorMWT(Strategy):
+class OptionsStrategyEngine(Strategy):
 
     # IMS Replaced with parameters from the driver program. See set_parameters method below
     # Symbols testing: GLD, SPY, QQQ, IWM, ARKK  -- check the strike step size depending on the ETF
@@ -111,7 +104,7 @@ class OptionsIronCondorMWT(Strategy):
     quantity_to_trade = 10 # reference in multiple parameters below, number of contracts
     parameters = {
         "symbol": "SPY",
-        "trade_strategy" : "bull-put-spread",  # iron-condor, bull-put-spread, bear-call-spread, hybrid
+        "trade_strategy" : "bear-call-spread",  # iron-condor, bull-put-spread, bear-call-spread, hybrid
         "option_duration": 40,  # How many days until the call option expires when we sell it
         "strike_step_size": 5,  # IMS Is this the strike spacing of the specific asset, can we get this from Polygon?
         "max_strikes" : 25,  # This needs to be appropriate for the name and the strike size
@@ -131,9 +124,9 @@ class OptionsIronCondorMWT(Strategy):
         "maximum_portfolio_allocation" : 0.75, # The maximum amount of the portfolio to allocate to this strategy for new condors
         "max_loss_trade_days_to_skip" : 5.0, # The number of days to skip after a max loss, rolls exceeded or undelying price move
         "max_volitility_days_to_skip" : 10.0, # The number of days to skip after a max move
-        "max_symbol_volitility" : 0.035, # Percent of max move to stay out of the market as a decimal
-        "starting_date" : "2023-01-01",
-        "ending_date" : "2023-12-31",
+        "max_symbol_volitility" : 0.05, # Percent of max move to stay out of the market as a decimal
+        "starting_date" : "2022-01-01",
+        "ending_date" : "2022-12-31",
     }
 
     # Default values if run directly instead of from backtest_driver program
@@ -337,13 +330,7 @@ class OptionsIronCondorMWT(Strategy):
             if "Success" in condor_status:
                 self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
                 # Add marker to the chart
-                self.add_marker(
-                    f"Created Trade, credit {purchase_credit}",
-                    value=underlying_price,
-                    color="green",
-                    symbol="triangle-up",    
-                    detail_text=f"Date: {dt}<br>Expiration: {expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}<br>credit: {purchase_credit}, <br>call delta: {last_call_delta}, <br>put delta: {last_put_delta}"
-                )
+                self.add_trade_marker(trade_strategy, dt, expiry, underlying_price, call_strike, put_strike, last_call_delta, last_put_delta, purchase_credit, roll)
             else:
                 # Add marker to the chart
                 self.add_marker(
@@ -351,7 +338,7 @@ class OptionsIronCondorMWT(Strategy):
                     value=underlying_price,
                     color="blue",
                     symbol="asterisk",
-                    detail_text=f"Date: {dt}<br>Expiration: {expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}<br>credit: {purchase_credit}"
+                    detail_text=f"Date: {dt}<br>Strategy: {trade_strategy}<br>Expiration: {expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}<br>credit: {purchase_credit}"
                 ) 
 
         else:
@@ -578,13 +565,7 @@ class OptionsIronCondorMWT(Strategy):
                 if "Success" in condor_status: 
                     self.margin_reserve = distance_of_wings * 100 * quantity_to_trade  # IMS need to update to reduce by credit
                     # Add marker to the chart
-                    self.add_marker(
-                        f"New Trade: credit {purchase_credit}",
-                        value=underlying_price,
-                        color="green",
-                        symbol="triangle-up",    
-                        detail_text=f"Date: {dt}<br>Expiration: {new_expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}, <br>call delta: {last_call_delta}, <br>put delta: {last_put_delta}"
-                    )
+                    self.add_trade_marker(trade_strategy, dt, new_expiry, underlying_price, call_strike, put_strike, last_call_delta, last_put_delta,     purchase_credit, roll)
                 else:
                     # Add marker to the chart
                     self.add_marker(
@@ -672,13 +653,7 @@ class OptionsIronCondorMWT(Strategy):
                 if "Success" in condor_status:
                     self.margin_reserve = self.margin_reserve + (distance_of_wings * 100 * quantity_to_trade)  # IMS need to update to reduce by credit
                     # Add marker to the chart
-                    self.add_marker(
-                        f"Rolled: {condor_status}, credit {purchase_credit}",
-                        value=underlying_price,
-                        color="purple",
-                        symbol="triangle-up",    
-                        detail_text=f"Date: {dt}<br>Expiration: {roll_expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}"
-                    )
+                    self.add_trade_marker(trade_strategy, dt, roll_expiry, underlying_price, call_strike, put_strike, last_call_delta, last_put_delta, purchase_credit,roll)       
 
                 else:
                     # Add marker to the chart
@@ -945,6 +920,55 @@ class OptionsIronCondorMWT(Strategy):
         if trade_strategy == "hybrid":
             return "both"
         return "both"
+    
+    def add_trade_marker(self, trade_strategy, dt, expiry, underlying_price, call_strike, put_strike, last_call_delta, last_put_delta, purchase_credit, roll):
+        if roll:
+            verb = "Rolled"
+        else:
+            verb = "Created"
+
+        if trade_strategy == "iron-condor":
+            self.add_marker(
+                f"{verb} Iron Condor, credit {purchase_credit}",
+                value=underlying_price,
+                color="green",
+                symbol="triangle-up",    
+                detail_text=f"Date: {dt}<br>Expiration: {expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}<br>credit: {purchase_credit}, <br>call delta: {last_call_delta}, <br>put delta: {last_put_delta}"
+            )
+        elif trade_strategy == "bull-put-spread":
+            self.add_marker(
+                f"{verb} Bull Put Spread, credit {purchase_credit}",
+                value=underlying_price,
+                color="green",
+                symbol="triangle-up",    
+                detail_text=f"Date: {dt}<br>Expiration: {expiry}<br>Last price: {underlying_price}<br>put short: {put_strike}<br>credit: {purchase_credit}, <br>put delta: {last_put_delta}"
+            )
+        elif trade_strategy == "bear-call-spread":
+            self.add_marker(
+                f"{verb} Bear Call Spread, credit {purchase_credit}",
+                value=underlying_price,
+                color="green",
+                symbol="triangle-up",    
+                detail_text=f"Date: {dt}<br>Expiration: {expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>credit: {purchase_credit}, <br>call delta: {last_call_delta}"
+            )
+        elif trade_strategy == "hybrid":
+            self.add_marker(
+                f"{verb} Trade, credit {purchase_credit}",
+                value=underlying_price,
+                color="green",
+                symbol="triangle-up",    
+                detail_text=f"Date: {dt}<br>Expiration: {expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}<br>credit: {purchase_credit}, <br>call delta: {last_call_delta}, <br>put delta: {last_put_delta}"
+            )
+        else:
+            self.add_marker(
+                f"{verb} Trade, credit {purchase_credit}",
+                value=underlying_price,
+                color="green",
+                symbol="triangle-up",    
+                detail_text=f"Date: {dt}<br>Expiration: {expiry}<br>Last price: {underlying_price}<br>call short: {call_strike}<br>put short: {put_strike}<br>credit: {purchase_credit}, <br>call delta: {last_call_delta}, <br>put delta: {last_put_delta}"
+            )
+
+        return
 
     def check_if_portfolio_blew_up(self, distance_of_wings, cash):
         if cash < distance_of_wings * 100:
@@ -1248,15 +1272,15 @@ if __name__ == "__main__":
         trading_fee = TradingFee(flat_fee=0.60)  # IMS account for trading fees and slippage
 
         # convert strategy_parmeters["starting_date"] to a datetime object
-        backtesting_start = datetime.strptime(OptionsIronCondorMWT.parameters["starting_date"], "%Y-%m-%d") 
-        backtesting_end = datetime.strptime(OptionsIronCondorMWT.parameters["ending_date"], "%Y-%m-%d")
+        backtesting_start = datetime.strptime(OptionsStrategyEngine.parameters["starting_date"], "%Y-%m-%d") 
+        backtesting_end = datetime.strptime(OptionsStrategyEngine.parameters["ending_date"], "%Y-%m-%d")
 
         # polygon_has_paid_subscription is set to true to api calls are not throttled
-        OptionsIronCondorMWT.backtest(
+        OptionsStrategyEngine.backtest(
             PolygonDataBacktesting,
             backtesting_start,
             backtesting_end,
-            benchmark_asset=OptionsIronCondorMWT.parameters["symbol"],
+            benchmark_asset=OptionsStrategyEngine.parameters["symbol"],
             buy_trading_fees=[trading_fee],
             sell_trading_fees=[trading_fee],
             show_tearsheet=True,
@@ -1264,7 +1288,7 @@ if __name__ == "__main__":
             save_tearsheet=True,    
             polygon_api_key=POLYGON_CONFIG["API_KEY"],
             polygon_has_paid_subscription=True,
-            name=OptionsIronCondorMWT.strategy_name,
-            budget = OptionsIronCondorMWT.parameters["budget"],
+            name=OptionsStrategyEngine.strategy_name,
+            budget = OptionsStrategyEngine.parameters["budget"],
         )
  
