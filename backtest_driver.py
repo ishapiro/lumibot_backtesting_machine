@@ -11,6 +11,10 @@ import toml
 import pprint
 pp = pprint.PrettyPrinter(indent=4)
 
+from get_asset_return import get_asset_return
+from get_strategy_return import get_strategy_return
+
+
 """
 Author:  Irv Shapiro
 License: MIT License
@@ -98,6 +102,7 @@ for toml_file in files:
         # Clean out the log direcectory from the privious run.  We do this since at the end of each run
         # we copy the log files to the strategy log directory.
         if os.path.exists("logs/"):
+            stats_file = ""
             files = os.listdir("logs/")
             # Delete each file in the log directory
             for file in files:
@@ -127,13 +132,26 @@ for toml_file in files:
 
         # Get a list of all files in Lumibot log directory
         files = os.listdir(source_dir)
+        stats_file = ""
+        for file in files:
+            if "_stats.csv" in file:
+                stats_file = file
 
         # Copy each file to the strategy log directory
         # Leave in the original log directory so the browser can display it
         for file in files:
             shutil.copy(os.path.join(source_dir, file), target_dir)
 
-        # Wait 10 seconds so lumibot can finish writing the log files before starting the next iteration
-        print("Waiting 10 seconds for Lumibot to finish writing log files")
-        time.sleep(10)
+        # Wait 3 seconds so lumibot can finish writing the log files before starting the next iteration
+        print("Waiting 3 seconds for Lumibot to finish writing log files")
+        time.sleep(3)
+
+        print("\033c", end='')  # clear the screen
+
+        print(f"Stats file {stats_file}")
+        strategy_return = get_strategy_return("logs/" + stats_file)
+        print(f"Strategy Return: {strategy_return}")
+
+        asset_return = get_asset_return(strategy_parameters["symbol"], strategy_parameters["starting_date"], strategy_parameters["ending_date"])
+        print(f"{strategy_parameters['symbol']} Return: {asset_return}")
 
