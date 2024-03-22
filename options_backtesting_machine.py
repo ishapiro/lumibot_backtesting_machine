@@ -103,8 +103,8 @@ class OptionsStrategyEngine(Strategy):
     distance_of_wings = 10 # reference in multiple parameters below, in dollars not strikes
     quantity_to_trade = 10 # reference in multiple parameters below, number of contracts
     parameters = {
-        "symbol": "SPY",
-        "trade_strategy" : "bear-call-spread",  # iron-condor, bull-put-spread, bear-call-spread, hybrid
+        "symbol": "IBM",
+        "trade_strategy" : "bull-put-spread",  # iron-condor, bull-put-spread, bear-call-spread, hybrid
         "option_duration": 40,  # How many days until the call option expires when we sell it
         "strike_step_size": 5,  # IMS Is this the strike spacing of the specific asset, can we get this from Polygon?
         "max_strikes" : 25,  # This needs to be appropriate for the name and the strike size
@@ -117,7 +117,7 @@ class OptionsStrategyEngine(Strategy):
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
         "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.5), # 
         "strike_roll_distance" : 1.0, # How close to the short do we allow the price to move before rolling.
-        "max_loss_multiplier" : .75, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
+        "max_loss_multiplier" : 0, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
         "roll_strategy" : "short", # short, delta, none # IMS not fully implemented
         "skip_on_max_rolls" : True, # If true, skip the trade days to skip after the maximum number of rolls is reached
         "delta_threshold" : 0.32, # If roll_strategy is delta this is the delta threshold for rolling
@@ -125,8 +125,8 @@ class OptionsStrategyEngine(Strategy):
         "max_loss_trade_days_to_skip" : 5.0, # The number of days to skip after a max loss, rolls exceeded or undelying price move
         "max_volitility_days_to_skip" : 10.0, # The number of days to skip after a max move
         "max_symbol_volitility" : 0.05, # Percent of max move to stay out of the market as a decimal
-        "starting_date" : "2022-01-01",
-        "ending_date" : "2022-12-31",
+        "starting_date" : "2020-01-01",
+        "ending_date" : "2020-12-31",
     }
 
     # Default values if run directly instead of from backtest_driver program
@@ -220,6 +220,11 @@ class OptionsStrategyEngine(Strategy):
         # Used to track delta found when walking options
         last_call_delta = 0
         last_put_delta = 0
+
+        # Make sure we have a valid strategy selected
+        if trade_strategy not in ["iron-condor", "bull-put-spread", "bear-call-spread", "hybrid"]:
+            print ("********************** Invalid trade strategy ************")
+            sys.exit(1)
 
         # Days to skip is different for max move and max loss
         # Days to skip for max rolls uses the max loss days to skip
