@@ -1,6 +1,15 @@
 import sqlite3
+import hashlib
+import json
 
 def add_benchmark_run_to_db(stats_file_name, strategy_return, benchmark_return, strategy_parameters):
+
+    # Create a string representation of the sorted dictionary
+    sorted_dict_string = json.dumps(strategy_parameters, sort_keys=True, default=str)
+
+    # Create a hash object
+    parameter_hash = hashlib.sha256(sorted_dict_string.encode()).hexdigest()
+
     conn = sqlite3.connect('mwt_backtesting_machine_results.db')  # Connect to the database
     cursor = conn.cursor()
 
@@ -33,8 +42,10 @@ def add_benchmark_run_to_db(stats_file_name, strategy_return, benchmark_return, 
             max_loss_trade_days_to_skip,
             max_volitility_days_to_skip,
             max_symbol_volitility,
-            trading_fee) 
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+            trading_fee,
+            stats_file_name,
+            parameter_hash)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
             (strategy_parameters["symbol"],
             strategy_parameters["trade_strategy"],
             strategy_return,
@@ -61,7 +72,9 @@ def add_benchmark_run_to_db(stats_file_name, strategy_return, benchmark_return, 
             strategy_parameters["max_loss_trade_days_to_skip"],
             strategy_parameters["max_volitility_days_to_skip"],
             strategy_parameters["max_symbol_volitility"],
-            strategy_parameters["trading_fee"])
+            strategy_parameters["trading_fee"],
+            stats_file_name,
+            parameter_hash)
     )
 
     # Commit the transaction

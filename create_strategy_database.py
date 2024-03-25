@@ -33,7 +33,9 @@ def create_database_and_table():
             max_loss_trade_days_to_skip INTEGER,
             max_volitility_days_to_skip INTEGER,
             max_symbol_volitility REAL,
-            trading_fee REAL
+            trading_fee REAL,
+            stats_file_name TEXT,
+            parameter_hash TEXT
         )
     ''')
 

@@ -14,6 +14,7 @@ pp = pprint.PrettyPrinter(indent=4)
 from get_asset_return import get_asset_return
 from get_strategy_return import get_strategy_return
 from add_benchmark_to_db import add_benchmark_run_to_db
+from check_for_previous_run import check_for_previous_run
 
 
 """
@@ -97,6 +98,13 @@ for toml_file in files:
         OptionsStrategyEngine.set_parameters(strategy_parameters)
 
         strategy_name = f'mwt-{strategy_parameters["symbol"]}-{strategy_parameters["trade_strategy"]}'
+        print(f">>>>> Running strategy: {strategy_name}")
+
+        # Check if the data already exists in the database and skip this run if it does
+        if check_for_previous_run(strategy_parameters):
+            print ("------ Data already exists in the database.  Skipping benchmark run.  Change at least one value to rerun the benchmark.")
+            print()
+            continue
 
         trading_fee = TradingFee(flat_fee=strategy_parameters["trading_fee"])  # Account for trading fees and slipage
 
@@ -158,4 +166,3 @@ for toml_file in files:
 
         # Add the benchmark return to the database
         add_benchmark_run_to_db(stats_file, strategy_return, benchmark_return, strategy_parameters)
-

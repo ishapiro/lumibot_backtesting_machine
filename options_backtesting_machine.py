@@ -139,7 +139,7 @@ class OptionsStrategyEngine(Strategy):
     #
     margin_reserve = 0
 
-    strategy_name = f'mwt-{parameters["symbol"]}-{parameters["trade_strategy"]}'
+    strategy_name = f'mwt-{parameters["symbol"]}-{parameters["trade_strategy"]}-{parameters["starting_date"]}-{parameters["ending_date"]}'   
 
     @classmethod
     def set_parameters(cls, parameters):
