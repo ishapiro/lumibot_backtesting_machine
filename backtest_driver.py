@@ -13,6 +13,7 @@ pp = pprint.PrettyPrinter(indent=4)
 
 from get_asset_return import get_asset_return
 from get_strategy_return import get_strategy_return
+from add_benchmark_to_db import add_benchmark_run_to_db
 
 
 """
@@ -62,7 +63,7 @@ strategy_parameters = {
         "max_volitility_days_to_skip" : 10.0, # The number of days to skip after a max move
         "max_symbol_volitility" : 0.05, # Percent of max move to stay out of the market as a decimal
         "starting_date" : "2022-01-01",
-        "ending_date" : "2022-12-31",
+        "ending_date" : "2022-03-31",
         "trading_fee" : 0.65,  # The trading fee in dollars per contract
     }
 
@@ -152,6 +153,9 @@ for toml_file in files:
         strategy_return = get_strategy_return("logs/" + stats_file)
         print(f"Strategy Return: {strategy_return}")
 
-        asset_return = get_asset_return(strategy_parameters["symbol"], strategy_parameters["starting_date"], strategy_parameters["ending_date"])
-        print(f"{strategy_parameters['symbol']} Return: {asset_return}")
+        benchmark_return = get_asset_return(strategy_parameters["symbol"], strategy_parameters["starting_date"], strategy_parameters["ending_date"])
+        print(f"{strategy_parameters['symbol']} Return: {benchmark_return}")
+
+        # Add the benchmark return to the database
+        add_benchmark_run_to_db(stats_file, strategy_return, benchmark_return, strategy_parameters)
 
