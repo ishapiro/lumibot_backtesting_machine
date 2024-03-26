@@ -82,12 +82,12 @@ for toml_file in files:
 
         # Read parameters from a TOML file
         strategy_parameters = toml.load(f"lumibot_backtesting_machine/strategy_configurations/{strategy_file}")
-        print()
-        print("**************************************************")
-        print("Strategy Parameters read from TOML file")
-        pp.pprint(strategy_parameters)
-        print("**************************************************")
-        print()
+        # print()
+        # print("**************************************************")
+        # print("Strategy Parameters read from TOML file")
+        # pp.pprint(strategy_parameters)
+        # print("**************************************************")
+        # print()
 
         capital_budget =  (strategy_parameters["distance_of_wings"] * 100 * strategy_parameters["quantity_to_trade"] * 1.5)
 
@@ -128,7 +128,10 @@ for toml_file in files:
             polygon_api_key=POLYGON_CONFIG["API_KEY"],
             polygon_has_paid_subscription=True,
             name=strategy_name,
-            budget = capital_budget,
+            budget=capital_budget,
+            show_plot=False,
+            show_indicators=False,
+            show_tearsheet=False,
         )
 
         # Copy the log files to the strategy log directory

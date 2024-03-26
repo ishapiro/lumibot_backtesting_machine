@@ -103,20 +103,20 @@ class OptionsStrategyEngine(Strategy):
     distance_of_wings = 10 # reference in multiple parameters below, in dollars not strikes
     quantity_to_trade = 10 # reference in multiple parameters below, number of contracts
     parameters = {
-        "symbol": "IBM",
+        "symbol": "QQQ",
         "trade_strategy" : "bull-put-spread",  # iron-condor, bull-put-spread, bear-call-spread, hybrid
         "option_duration": 40,  # How many days until the call option expires when we sell it
         "strike_step_size": 5,  # IMS Is this the strike spacing of the specific asset, can we get this from Polygon?
         "max_strikes" : 25,  # This needs to be appropriate for the name and the strike size
-        "call_delta_required": 0.16, # The delta values are different if we are skewing the condor
-        "put_delta_required": 0.16,
+        "call_delta_required": 0.30, # The delta values are different if we are skewing the condor
+        "put_delta_required": 0.30,
         "maximum_rolls": 2,  # The maximum number of rolls we will do
         "days_before_expiry_to_buy_back": 7,  # How many days before expiry to buy back the call
         "quantity_to_trade": quantity_to_trade,  # The number of contracts to trade
         "minimum_hold_period": 7,  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
         "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.5), # 
-        "strike_roll_distance" : 1.0, # How close to the short do we allow the price to move before rolling.
+        "strike_roll_distance" : 0.1, # How close to the short do we allow the price to move before rolling.
         "max_loss_multiplier" : 0, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
         "roll_strategy" : "short", # short, delta, none # IMS not fully implemented
         "skip_on_max_rolls" : True, # If true, skip the trade days to skip after the maximum number of rolls is reached
