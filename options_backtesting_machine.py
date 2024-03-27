@@ -1273,7 +1273,7 @@ class OptionsStrategyEngine(Strategy):
 # Make sure that the dates selected are supported by you Polygon.io subscription
 
 if __name__ == "__main__":
-
+        
         trading_fee = TradingFee(flat_fee=0.60)  # IMS account for trading fees and slippage
 
         # convert strategy_parmeters["starting_date"] to a datetime object
