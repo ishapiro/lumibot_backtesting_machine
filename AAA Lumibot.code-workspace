@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"name": "mwt_benchmarking_tool",
+			"path": "../mwt_benchmarking_tool"
+		}
+	],
+	"settings": {}
+}

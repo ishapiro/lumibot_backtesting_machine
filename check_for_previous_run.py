@@ -12,7 +12,7 @@ def check_for_previous_run(strategy_parameters):
     # Create a hash object
     parameter_hash = hashlib.sha256(sorted_dict_string.encode()).hexdigest()
 
-    conn = sqlite3.connect('mwt_backtesting_machine_results.db')  # Connect to the database
+    conn = sqlite3.connect('/Users/irvshapiro/drvax-code-local/AAA Lumibot/mwt_backtesting_machine_results.db')  # Connect to the database
     cursor = conn.cursor()
 
     # Check if the data already exists
