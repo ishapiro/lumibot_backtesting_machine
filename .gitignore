@@ -3,6 +3,4 @@ credentials.py
 logs/
 strategy_logs/
 strategy_configurations/
-
-
 .DS_Store
