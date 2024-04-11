@@ -102,9 +102,11 @@ class OptionsStrategyEngine(Strategy):
     
     distance_of_wings = 10 # reference in multiple parameters below, in dollars not strikes
     quantity_to_trade = 10 # reference in multiple parameters below, number of contracts
+
+    
     parameters = {
-        "symbol": "QQQ",
-        "trade_strategy" : "bull-put-spread",  # iron-condor, bull-put-spread, bear-call-spread, hybrid
+        "symbol": "SPY" , # The symbol to trade
+        "trade_strategy" : "iron-condor",  # iron-condor, bull-put-spread, bear-call-spread, hybrid
         "option_duration": 40,  # How many days until the call option expires when we sell it
         "strike_step_size": 5,  # IMS Is this the strike spacing of the specific asset, can we get this from Polygon?
         "max_strikes" : 25,  # This needs to be appropriate for the name and the strike size
@@ -125,8 +127,8 @@ class OptionsStrategyEngine(Strategy):
         "max_loss_trade_days_to_skip" : 5.0, # The number of days to skip after a max loss, rolls exceeded or undelying price move
         "max_volitility_days_to_skip" : 10.0, # The number of days to skip after a max move
         "max_symbol_volitility" : 0.05, # Percent of max move to stay out of the market as a decimal
-        "starting_date" : "2020-01-01",
-        "ending_date" : "2020-12-31",
+        "starting_date" : "2023-01-01",
+        "ending_date" : "2023-12-31",
     }
 
     # Default values if run directly instead of from backtest_driver program
@@ -410,13 +412,13 @@ class OptionsStrategyEngine(Strategy):
                         greeks = self.get_greeks(position.asset)
                         self.debug_print(f"Delta: {greeks['delta']}, Theta: {greeks['theta']}, Gamma: {greeks['gamma']}, Vega: {greeks['vega']}")
 
-                        # Track the vega for the call and put options
-                        if position.asset.right == "CALL":
-                            self.call_vega.append(greeks["vega"])
-                            self.add_line(f"call_vega", greeks.vega)   
-                        elif position.asset.right == "PUT":
-                            self.put_vega.append(greeks["vega"])
-                            self.add_line(f"put_vega", greeks.vega)  
+                        # # Track the vega for the call and put options
+                        # if position.asset.right == "CALL":
+                        #     self.call_vega.append(greeks["vega"])
+                        #     self.add_line(f"call_vega", greeks.vega)   
+                        # elif position.asset.right == "PUT":
+                        #     self.put_vega.append(greeks["vega"])
+                        #     self.add_line(f"put_vega", greeks.vega)  
 
                         # Check the delta of the option if the strategy is delta based
                         if roll_strategy == "delta":
@@ -1281,7 +1283,7 @@ if __name__ == "__main__":
         backtesting_end = datetime.strptime(OptionsStrategyEngine.parameters["ending_date"], "%Y-%m-%d")
 
         # polygon_has_paid_subscription is set to true to api calls are not throttled
-        OptionsStrategyEngine.backtest(
+        backtest_results = OptionsStrategyEngine.backtest(
             PolygonDataBacktesting,
             backtesting_start,
             backtesting_end,
@@ -1296,4 +1298,7 @@ if __name__ == "__main__":
             name=OptionsStrategyEngine.strategy_name,
             budget = OptionsStrategyEngine.parameters["budget"],
         )
+
+        print("********** Backtest Results **********")
+        pprint.pprint(backtest_results)
  
