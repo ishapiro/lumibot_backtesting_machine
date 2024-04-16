@@ -30,6 +30,11 @@ is constructed by selling a call spread and a put spread.  The call spread is co
 buying a call option with a higher strike price.  The put spread is constructed by selling a put option and buying a put
 option with a lower strike price.  The distance between the short and long strikes is the "wings" of the condor.
 
+When selling premimum it is often safest to use ETFs as the underlying asset.  ETFs are less volatile than individual
+stocks and have a lower margin requirement.  The following are the ETFs with the highest volume options: SPY, QQQ, IWM,
+ EEM, XLF, FXI, XLE, GLD, GDX, EFA, EWZ, TLT, EWC, KWEB, ARKK, TQQQ, LQD, BKLN.
+
+
 This parameterized trade testing application is designed to evaluate a range of parameters for a trade stragegy over a range 
 of parmeters.  The parameters include the delta of the shorts, the distance of the wings, the days before expiration to exit
 the trade, and the days before expiration to roll one of the spreads.  The application also supports setting an option maximum
@@ -48,7 +53,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 """
 
 # The following parameter determines if we use the pip install Lumibot or the local copy
-use_local_lumibot = False
+use_local_lumibot = True
 
 ################################################################################
 # Must Be Imported First If Run Locally
@@ -105,20 +110,20 @@ class OptionsStrategyEngine(Strategy):
 
     
     parameters = {
-        "symbol": "SPY" , # The symbol to trade
-        "trade_strategy" : "iron-condor",  # iron-condor, bull-put-spread, bear-call-spread, hybrid
-        "option_duration": 40,  # How many days until the call option expires when we sell it
+        "symbol": "IWM" , # The symbol to trade
+        "trade_strategy" : "bull-put-spread",  # iron-condor, bull-put-spread, bear-call-spread, hybrid
+        "option_duration": 20,  # How many days until the call option expires when we sell it
         "strike_step_size": 5,  # IMS Is this the strike spacing of the specific asset, can we get this from Polygon?
         "max_strikes" : 25,  # This needs to be appropriate for the name and the strike size
-        "call_delta_required": 0.30, # The delta values are different if we are skewing the condor
-        "put_delta_required": 0.30,
+        "call_delta_required": 0.16, # The delta values are different if we are skewing the condor
+        "put_delta_required": 0.16,
         "maximum_rolls": 2,  # The maximum number of rolls we will do
         "days_before_expiry_to_buy_back": 7,  # How many days before expiry to buy back the call
         "quantity_to_trade": quantity_to_trade,  # The number of contracts to trade
         "minimum_hold_period": 7,  # The of number days to wait before exiting a strategy -- this strategy only trades once a day
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
         "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.5), # 
-        "strike_roll_distance" : 0.1, # How close to the short do we allow the price to move before rolling.
+        "strike_roll_distance" : 1.0, # How close to the short do we allow the price to move before rolling.
         "max_loss_multiplier" : 0, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
         "roll_strategy" : "short", # short, delta, none # IMS not fully implemented
         "skip_on_max_rolls" : True, # If true, skip the trade days to skip after the maximum number of rolls is reached
@@ -246,7 +251,7 @@ class OptionsStrategyEngine(Strategy):
         # Get the current datetime
         dt = self.get_datetime()
 
-        print (f"************************* Date: {dt} Underlying: {rounded_underlying_price} *************************")
+        self.debug_print (f"************************* Date: {dt} Underlying: {rounded_underlying_price} *************************")
 
         self.historical_price.append({"price": rounded_underlying_price, "date": dt})
 
@@ -1290,9 +1295,10 @@ if __name__ == "__main__":
             benchmark_asset=OptionsStrategyEngine.parameters["symbol"],
             buy_trading_fees=[trading_fee],
             sell_trading_fees=[trading_fee],
-            show_tearsheet=True,
-            show_indicators=True,
-            save_tearsheet=True,    
+            show_indicators=False,  
+            save_tearsheet=True,
+            show_plot=False,
+            show_tearsheet=False,
             polygon_api_key=POLYGON_CONFIG["API_KEY"],
             polygon_has_paid_subscription=True,
             name=OptionsStrategyEngine.strategy_name,

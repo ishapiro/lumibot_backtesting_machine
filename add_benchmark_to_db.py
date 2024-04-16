@@ -2,7 +2,7 @@ import sqlite3
 import hashlib
 import json
 
-def add_benchmark_run_to_db(stats_file_name, strategy_return, benchmark_return, strategy_parameters):
+def add_benchmark_run_to_db(stats_file_name, strategy_return, benchmark_return, strategy_parameters, tearsheet_html):
 
     # Create a string representation of the sorted dictionary
     sorted_dict_string = json.dumps(strategy_parameters, sort_keys=True, default=str)
@@ -12,6 +12,11 @@ def add_benchmark_run_to_db(stats_file_name, strategy_return, benchmark_return, 
 
     conn = sqlite3.connect('mwt_backtesting_machine_results.db')  # Connect to the database
     cursor = conn.cursor()
+
+    tearsheet_content = None
+    # Read the file tearsheet_html and insert it into the database
+    with open(tearsheet_html, 'r') as file:
+        tearsheet_content = file.read()
 
     # Insert new data
     status = cursor.execute('''
@@ -44,8 +49,9 @@ def add_benchmark_run_to_db(stats_file_name, strategy_return, benchmark_return, 
             max_symbol_volitility,
             trading_fee,
             stats_file_name,
+            tearsheet_html,
             parameter_hash)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
             (strategy_parameters["symbol"],
             strategy_parameters["trade_strategy"],
             strategy_return,
@@ -74,6 +80,7 @@ def add_benchmark_run_to_db(stats_file_name, strategy_return, benchmark_return, 
             strategy_parameters["max_symbol_volitility"],
             strategy_parameters["trading_fee"],
             stats_file_name,
+            tearsheet_content,
             parameter_hash)
     )
 

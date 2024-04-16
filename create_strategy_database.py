@@ -35,6 +35,7 @@ def create_database_and_table():
             max_symbol_volitility REAL,
             trading_fee REAL,
             stats_file_name TEXT,
+            tearsheet_html TEXT,
             parameter_hash TEXT
         )
     ''')

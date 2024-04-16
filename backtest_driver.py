@@ -150,9 +150,12 @@ class BacktestDriver():
                 # Get a list of all files in Lumibot log directory
                 files = os.listdir(source_dir)
                 stats_file = ""
+                tearsheet_file = ""
                 for file in files:
                     if "_stats.csv" in file:
                         stats_file = file
+                    if "_tearsheet.html" in file:
+                        tearsheet_file = file
 
                 # Copy each file to the strategy log directory
                 # Leave in the original log directory so the browser can display it
@@ -173,7 +176,7 @@ class BacktestDriver():
                 print(f"{strategy_parameters['symbol']} Return: {benchmark_return}")
 
                 # Add the benchmark return to the database
-                add_benchmark_run_to_db(stats_file, strategy_return, benchmark_return, strategy_parameters)
+                add_benchmark_run_to_db(stats_file, strategy_return, benchmark_return, strategy_parameters, tearsheet_file)
 
 
 if __name__ == "__main__":
