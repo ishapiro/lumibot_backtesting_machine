@@ -15,8 +15,9 @@ def add_benchmark_run_to_db(stats_file_name, strategy_return, benchmark_return, 
 
     tearsheet_content = None
     # Read the file tearsheet_html and insert it into the database
-    with open(tearsheet_html, 'r') as file:
-        tearsheet_content = file.read()
+    if (tearsheet_html != ""):
+        with open(tearsheet_html, 'r') as file:
+            tearsheet_content = file.read()
 
     # Insert new data
     status = cursor.execute('''

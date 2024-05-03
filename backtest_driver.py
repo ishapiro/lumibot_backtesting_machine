@@ -1,3 +1,44 @@
+"""
+Author:  Irv Shapiro
+License: MIT License
+
+The Plan --- This is a work in process ...
+
+This module reads parameters from a TOML configuration located in the strategy_configurations
+directory, runs the strategy and moves the logs in the strategy_logs directory with the same
+name as the configuration file.  The TOML file can have any name but should end with .toml
+
+Results from the backtest are stored in the database.  The database is used to track the results
+of the backtest and to determine if the backtest has already been run.  If the backtest has already
+been run, the backtest is skipped.  The backtest is rerun if any of the parameters in the TOML file
+are changed.
+
+"""
+
+"""
+Disclaimer: The options strategies presented within this content are intended for educational purposes only. They are not meant to be used for trading live stocks or any other financial instruments. The information provided is based on historical data and hypothetical scenarios, and it does not guarantee future results or profits.
+
+Trading stocks and options involve substantial risks and may result in the loss of your invested capital. It is essential to conduct thorough research, seek advice from a qualified financial professional, and carefully consider your risk tolerance before engaging in any trading activities.
+
+By accessing and utilizing the information presented, you acknowledge that you are solely responsible for any trading decisions you make. Neither the author nor any associated parties shall be held liable for any losses, damages, or consequences arising from the use of the strategies discussed in this content.
+"""
+
+# The following parameter determines if we use the pip install Lumibot or the local copy
+use_local_lumibot = True
+
+################################################################################
+# Must Be Imported First If Run Locally
+if use_local_lumibot:
+    import os
+    import sys
+
+    myPath = os.path.dirname(os.path.abspath(__file__))
+    myPath = myPath.replace("lumibot_backtesting_machine", "")
+    myPath = myPath + "/lumibot/"
+    sys.path.insert(0, myPath)
+################################################################################
+
+
 # IMS moved all module includes to the top of the codels 
 from credentials import POLYGON_CONFIG
 from datetime import datetime, timedelta
@@ -16,27 +57,6 @@ from get_asset_return import get_asset_return
 from get_strategy_return import get_strategy_return
 from add_benchmark_to_db import add_benchmark_run_to_db
 from check_for_previous_run import check_for_previous_run
-
-
-"""
-Author:  Irv Shapiro
-License: MIT License
-
-The Plan --- This is a work in process ...
-
-This module reads parameters from a TOML configuration located in the strategy_configurations
-directory, runs the strategy and moves the logs in the strategy_logs directory with the same
-name as the configuration file.  The TOML file can have any name but should end with .toml
-
-"""
-
-"""
-Disclaimer: The options strategies presented within this content are intended for educational purposes only. They are not meant to be used for trading live stocks or any other financial instruments. The information provided is based on historical data and hypothetical scenarios, and it does not guarantee future results or profits.
-
-Trading stocks and options involve substantial risks and may result in the loss of your invested capital. It is essential to conduct thorough research, seek advice from a qualified financial professional, and carefully consider your risk tolerance before engaging in any trading activities.
-
-By accessing and utilizing the information presented, you acknowledge that you are solely responsible for any trading decisions you make. Neither the author nor any associated parties shall be held liable for any losses, damages, or consequences arising from the use of the strategies discussed in this content.
-"""
 
 class BacktestDriver():
 
@@ -137,6 +157,7 @@ class BacktestDriver():
                     show_plot=False,
                     show_indicators=False,
                     show_tearsheet=False,
+                    save_tearsheet=True,
                 )
 
                 # Copy the log files to the strategy log directory
@@ -175,8 +196,11 @@ class BacktestDriver():
                 benchmark_return = get_asset_return(strategy_parameters["symbol"], strategy_parameters["starting_date"], strategy_parameters["ending_date"])
                 print(f"{strategy_parameters['symbol']} Return: {benchmark_return}")
 
+                tearsheet_path = ""
+                if tearsheet_file != "":
+                    tearsheet_path = f"strategy_logs/{strategy_directory}/{tearsheet_file}"
                 # Add the benchmark return to the database
-                add_benchmark_run_to_db(stats_file, strategy_return, benchmark_return, strategy_parameters, tearsheet_file)
+                add_benchmark_run_to_db(stats_file, strategy_return, benchmark_return, strategy_parameters, tearsheet_path)
 
 
 if __name__ == "__main__":

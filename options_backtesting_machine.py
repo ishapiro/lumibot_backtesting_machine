@@ -53,7 +53,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 """
 
 # The following parameter determines if we use the pip install Lumibot or the local copy
-use_local_lumibot = True
+use_local_lumibot = False
 
 ################################################################################
 # Must Be Imported First If Run Locally
@@ -81,6 +81,7 @@ import sys
 import pprint
 pp = pprint.PrettyPrinter(indent=4)
 from pprint import pformat  
+import requests
 
 from inspect import currentframe, getframeinfo
 
@@ -103,18 +104,19 @@ from lumibot.backtesting import PolygonDataBacktesting
 class OptionsStrategyEngine(Strategy):
 
     # IMS Replaced with parameters from the driver program. See set_parameters method below
-    # Symbols testing: GLD, SPY, QQQ, IWM, ARKK  -- check the strike step size depending on the ETF
+    # Symbols testing: GLD, SPY, QQQ, IWM, ARKK, EEM  -- check the strike step size depending on the ETF
+    # HYG did not work --- need to investage
     
     distance_of_wings = 10 # reference in multiple parameters below, in dollars not strikes
     quantity_to_trade = 10 # reference in multiple parameters below, number of contracts
 
     
     parameters = {
-        "symbol": "IWM" , # The symbol to trade
-        "trade_strategy" : "bull-put-spread",  # iron-condor, bull-put-spread, bear-call-spread, hybrid
-        "option_duration": 20,  # How many days until the call option expires when we sell it
-        "strike_step_size": 5,  # IMS Is this the strike spacing of the specific asset, can we get this from Polygon?
-        "max_strikes" : 25,  # This needs to be appropriate for the name and the strike size
+        "symbol": "SPY" , # The symbol to trade
+        "trade_strategy" : "iron-condor",  # iron-condor, bull-put-spread, bear-call-spread, hybrid
+        "option_duration": 40,  # How many days until the call option expires when we sell it
+        "strike_step_size": 1,  # IMS Is this the strike spacing of the specific asset, can we get this from Polygon?
+        "max_strikes" : 100,  # This needs to be appropriate for the name and the strike size
         "call_delta_required": 0.16, # The delta values are different if we are skewing the condor
         "put_delta_required": 0.16,
         "maximum_rolls": 2,  # The maximum number of rolls we will do
@@ -124,7 +126,7 @@ class OptionsStrategyEngine(Strategy):
         "distance_of_wings" : distance_of_wings, # Distance of the longs from the shorts in dollars -- the wings
         "budget" : (distance_of_wings * 100 * quantity_to_trade * 1.5), # 
         "strike_roll_distance" : 1.0, # How close to the short do we allow the price to move before rolling.
-        "max_loss_multiplier" : 0, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
+        "max_loss_multiplier" : 2.0, # The maximum loss is the initial credit * max_loss_multiplier, set to 0 to disable
         "roll_strategy" : "short", # short, delta, none # IMS not fully implemented
         "skip_on_max_rolls" : True, # If true, skip the trade days to skip after the maximum number of rolls is reached
         "delta_threshold" : 0.32, # If roll_strategy is delta this is the delta threshold for rolling
@@ -251,7 +253,7 @@ class OptionsStrategyEngine(Strategy):
         # Get the current datetime
         dt = self.get_datetime()
 
-        self.debug_print (f"************************* Date: {dt} Underlying: {rounded_underlying_price} *************************")
+        self.debug_print (f"************************* Iteration Date: {dt} Underlying rounded price: {rounded_underlying_price} *************************")
 
         self.historical_price.append({"price": rounded_underlying_price, "date": dt})
 
@@ -688,6 +690,8 @@ class OptionsStrategyEngine(Strategy):
         self, symbol, expiry, strike_step_size, call_delta_required, put_delta_required, quantity_to_trade, distance_of_wings, side, maximum_portfolio_allocation, last_trade_size, max_strikes, roll
     ):
 
+        self.debug_print (f"************************* Creating Legs *************************")
+        self.debug_print (f"Symbol: {symbol}, Expiry: {expiry}, Strike Step Size: {strike_step_size}, Call Delta Required: {call_delta_required}, Put Delta Required: {put_delta_required}, Quantity to Trade: {quantity_to_trade}, Distance of Wings: {distance_of_wings}, Side: {side}, Maximum Portfolio Allocation: {maximum_portfolio_allocation}, Last Trade Size: {last_trade_size}, Max Strikes: {max_strikes}, Roll: {roll}")
         status = "no condor created"
         # break_date = dtime.date(2022, 3, 18)
         # if expiry == break_date:
@@ -738,16 +742,24 @@ class OptionsStrategyEngine(Strategy):
 
         # IMS The following code is not very efficient and should be refactored
 
-        strikes = [
-            rounded_underlying_price + strike_step_size * i for i in range(0, max_strikes)
-        ] + [rounded_underlying_price - strike_step_size * i for i in range(1, max_strikes)]
-        strikes.sort()  # Sort the strikes
+        # strikes = [
+        #     rounded_underlying_price + strike_step_size * i for i in range(0, max_strikes)
+        # ] + [rounded_underlying_price - strike_step_size * i for i in range(1, max_strikes)]
+        # strikes.sort()  # Sort the strikes
+
+        self.debug_print ("Retrieving strikes")
+        api_key = POLYGON_CONFIG["API_KEY"]
+        put_strikes, call_strikes = self.get_option_strikes(symbol, expiry, max_strikes, rounded_underlying_price, api_key)
+
+        self.debug_print(f"Current Price: {rounded_underlying_price}")
+        self.debug_print(f"Put Strikes: {put_strikes}")
+        self.debug_print(f"Call Strikes: {call_strikes}")
 
         # IMS Eliminate negative numbers from strikes
-        strikes = [strike for strike in strikes if strike > 0]
+        # strikes = [strike for strike in strikes if strike > 0]
     
         # Only keep the strikes above the underlying price for calls
-        call_strikes = [strike for strike in strikes if strike > underlying_price]
+        call_strikes = [call_strike for call_strike in call_strikes if call_strike > underlying_price]
         # Sort the strikes in ascending order
         call_strikes.sort()
         call_strike_deltas = self.get_strike_deltas(
@@ -755,6 +767,7 @@ class OptionsStrategyEngine(Strategy):
         )
 
         # Find the call option with an appropriate delta and the expiry
+        # IMS Optimization -- start searching from the back, this should be the last entry
         call_strike = None
         for strike, delta in call_strike_deltas.items():
             if delta is not None and delta <= call_delta_required:
@@ -765,10 +778,11 @@ class OptionsStrategyEngine(Strategy):
         # If we didn't find a call strike set an error message
         if call_strike is None and (side == "call" or side =="both"):
             status = "no call strike found"
-            return status, 0, 0, 0, 0
+            print ("********************** No Call Strike Found ************")
+            return status, 0, 0, 0, 0, 0, 0
 
         # Only keep the strikes below the underlying price for puts
-        put_strikes = [strike for strike in strikes if strike < underlying_price]
+        put_strikes = [put_strike for put_strike in put_strikes if put_strike < underlying_price]
         # Sort the strikes in descending order
         put_strikes.sort(reverse=True)
         put_strike_deltas = self.get_strike_deltas(
@@ -786,7 +800,8 @@ class OptionsStrategyEngine(Strategy):
         # If we didn't find a  put strike set an error message
         if put_strike is None and (side == "put" or side =="both"):
             status = "no put strike found"
-            return status, 0, 0, 0, 0
+            print ("********************** No Put Strike Found ************")
+            return status, 0, 0, 0, 0, 0, 0
 
         ###################################################################################
         # Attempt to find the orders (combination of strike, and expiration)
@@ -897,11 +912,14 @@ class OptionsStrategyEngine(Strategy):
              call_buy_order is None or \
              put_sell_order is None or \
              put_buy_order is None):
-            return "failed to place condor", call_strike, put_strike, 0, 0
+            print ("********************** Failed to place condor ************")
+            return "failed to place condor", call_strike, put_strike, 0, 0, 0 ,0
         elif side == "call" and (call_sell_order is None or call_buy_order is None):
-            return "failed to roll call side", call_strike, put_strike, 0, 0
+            print ("********************** Failed to place call side ************")
+            return "failed to roll call side", call_strike, put_strike, 0, 0, 0 ,0
         elif side == "put" and (put_sell_order is None or put_buy_order is None):
-            return "failed to roll put side", call_strike, put_strike, 0, 0
+            print ("********************** Failed to place put side ************")
+            return "failed to roll put side", call_strike, put_strike, 0, 0, 0, 0
         else:
             status_messages = {
                 "call": "Success: rolled the call side",
@@ -1096,11 +1114,13 @@ class OptionsStrategyEngine(Strategy):
                 right=right,
             )
 
-            # Get the last price for this asset
-            self.debug_print (f"get_last_price {asset.strike}")
-            price = self.get_last_price(asset)
+            # Use the price to verify the strike is valid
+            # IMS we may be able to drop this now that we use polygon to retrieve the strikes
+            # IMS Potential optimization
+            # valid_strike = self.get_last_price(asset)
+            valid_strike = 1
 
-            if price is not None and price > 0:
+            if valid_strike is not None and valid_strike > 0:
                 # Get the greeks for the asset if it is a valid strike
                 # Invalid strikes will have a price of zero
                 # Invoking get_geeks with an invalid strike will generate an error
@@ -1272,6 +1292,38 @@ class OptionsStrategyEngine(Strategy):
         dt = self.get_datetime()
         suggested_date = self.get_option_expiration_after_date(dt + timedelta(days=option_duration))
         return self.search_next_market_date(suggested_date, symbol, strike_price)
+    
+    def get_option_strikes(self, symbol, expiration_date, maximum_strikes, current_price, api_key):
+        options = []
+        options_url = f"https://api.polygon.io/v3/reference/options/contracts?underlying_ticker={symbol}&limit=500&expired=true&expiration_date={expiration_date}&apiKey={api_key}"
+        while True:
+            response = requests.get(options_url)
+            data = response.json()
+            options += data['results']
+            if data.get('next_url'):
+                options_cursor = data['next_url']
+                options_url = f"{options_cursor}&apiKey={api_key}"
+            else:
+                break
+
+        # Separate the options into puts and calls just in case the strikes are not the same for both
+        put_strikes = [option['strike_price'] for option in options if option['contract_type'] == 'put']
+        call_strikes = [option['strike_price'] for option in options if option['contract_type'] == 'call']
+
+        # Sort the strikes so we can find the middle X strikes
+        call_strikes.sort()
+
+        # Find the index of the current_price in the put_strikes and call_strikes
+        put_index = min(range(len(put_strikes)), key=lambda i: abs(put_strikes[i]-current_price))
+        call_index = min(range(len(call_strikes)), key=lambda i: abs(call_strikes[i]-current_price))
+
+        middle_strike = maximum_strikes // 2
+
+        # Only return maximum_strikes number of put_strikes and call_strikes
+        put_strikes = put_strikes[max(0, put_index-middle_strike):put_index+middle_strike]
+        call_strikes = call_strikes[max(0, call_index-middle_strike):call_index+middle_strike]  
+
+        return put_strikes, call_strikes
             
 ################################################################################################
 # If this module is run as a script it will invoke the backtest method in the Lumibot framework.
